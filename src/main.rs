@@ -21,15 +21,17 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Use Esc to quit
 "#;
 
-// enum Mode {
-// Draw,
-// Insert,
-// }
+#[derive(PartialEq)]
+enum Mode {
+    Draw,
+    Insert,
+}
 
 async fn print_events() {
     let mut reader = EventStream::new();
+    let mut previous_char = '*';
     let mut brush = '*';
-    // let mut mode = Mode::Draw;
+    let mut mode = Mode::Draw;
 
     loop {
         let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
@@ -43,23 +45,38 @@ async fn print_events() {
                     Some(Ok(event)) => {
                         match event {
                             Event::Mouse(ev) => {
-                                match ev.kind {
-                                    MouseEventKind::Drag(_) |
-                                    MouseEventKind::Down(_) => {
-                                        execute!(stdo, cursor::MoveTo(ev.column, ev.row)).unwrap();
-                                        print!("{brush}");
-                                    },
-                                    _ => {}
+                                if mode == Mode::Draw {
+                                    match ev.kind {
+                                        MouseEventKind::Drag(_) |
+                                        MouseEventKind::Down(_) => {
+                                            execute!(stdo, cursor::MoveTo(ev.column, ev.row)).unwrap();
+                                            print!("{brush}");
+                                        },
+                                        _ => {}
+                                    }
                                 }
-
                             },
                             Event::Key(ev) => {
                                 if ev.modifiers == KeyModifiers::SHIFT {
                                     print!("{:?}", ev);
                                 }
+
                                 match ev.code {
                                     KeyCode::Char(code) => {
+                                        if mode == Mode::Insert {
+                                            print!("{}", code);
+                                            execute!(stdo, cursor::MoveRight(1)).unwrap();
+                                        }
                                         brush = code;
+                                        if code == previous_char {
+                                            mode = match code {
+                                                'i' => Mode::Insert,
+                                                'd' => Mode::Draw,
+                                                _ => mode
+                                            }
+
+                                        }
+                                        previous_char = code;
                                     },
                                     _ => {}
                                 }
@@ -73,9 +90,11 @@ async fn print_events() {
                         if event == Event::Key(KeyCode::Esc.into()) {
                             break;
                         }
+                        let (x, y) = position().unwrap_or_default();
                         let (max_x, googa)= size().unwrap_or_default();
                         execute!(stdo, cursor::MoveTo( 0, googa)).unwrap();
                         print!("INSERT MODE, {max_x}, {googa}");
+                        execute!(stdo, cursor::MoveTo( x, y )).unwrap();
                     }
                     Some(Err(e)) => println!("Error: {:?}\r", e),
                     None => break,
