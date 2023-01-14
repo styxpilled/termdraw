@@ -37,6 +37,9 @@ fn draw(
     brush: &mut char,
     mode: &mut Mode,
 ) -> bool {
+    if event == Event::Key(KeyCode::Esc.into()) {
+        return false;
+    }
     match event {
         Event::Mouse(ev) => {
             if *mode == Mode::Draw {
@@ -65,25 +68,33 @@ fn draw(
                     *brush = code;
                     if code == *previous_char {
                         *mode = match code {
-                            'i' => Mode::Insert,
-                            'd' => Mode::Draw,
+                            'i' => {
+                                execute!(stdo, cursor::Show).unwrap();
+                                Mode::Insert
+                            }
+                            'd' => {
+                                execute!(stdo, cursor::Hide).unwrap();
+                                Mode::Draw
+                            }
                             _ => *mode,
                         }
                     }
                     *previous_char = code;
+                }
+                KeyCode::Backspace => {
+                    execute!(
+                        stdo,
+                        cursor::MoveLeft(1),
+                        crossterm::style::Print(" "),
+                        cursor::MoveLeft(1)
+                    )
+                    .unwrap();
                 }
                 _ => {}
             }
         }
         _ => {}
     };
-    if event == Event::Key(KeyCode::Char('c').into()) {
-        println!("Cursor position: {:?}\r", position());
-    }
-
-    if event == Event::Key(KeyCode::Esc.into()) {
-        return false;
-    }
     let (x, y) = position().unwrap_or_default();
     let (max_x, googa) = size().unwrap_or_default();
     execute!(stdo, cursor::MoveTo(0, googa)).unwrap();
