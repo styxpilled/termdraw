@@ -1,4 +1,7 @@
-use std::{io::stdout, time::Duration};
+use std::{
+    io::{stdout, Stdout},
+    time::Duration,
+};
 
 use futures::{future::FutureExt, select, StreamExt};
 use futures_timer::Delay;
@@ -21,13 +24,79 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Use Esc to quit
 "#;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 enum Mode {
     Draw,
     Insert,
 }
 
-async fn print_events() {
+fn draw(
+    event: Event,
+    stdo: &mut Stdout,
+    previous_char: &mut char,
+    brush: &mut char,
+    mode: &mut Mode,
+) -> bool {
+    match event {
+        Event::Mouse(ev) => {
+            if *mode == Mode::Draw {
+                match ev.kind {
+                    MouseEventKind::Drag(_) | MouseEventKind::Down(_) => {
+                        execute!(
+                            stdo,
+                            cursor::MoveTo(ev.column, ev.row),
+                            crossterm::style::Print(brush)
+                        )
+                        .unwrap();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Event::Key(ev) => {
+            // if ev.modifiers == KeyModifiers::SHIFT {
+            //     print!("{:?}", ev);
+            // }
+            match ev.code {
+                KeyCode::Char(code) => {
+                    if *mode == Mode::Insert {
+                        execute!(stdo, crossterm::style::Print(code),).unwrap();
+                    }
+                    *brush = code;
+                    if code == *previous_char {
+                        *mode = match code {
+                            'i' => Mode::Insert,
+                            'd' => Mode::Draw,
+                            _ => *mode,
+                        }
+                    }
+                    *previous_char = code;
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    };
+    if event == Event::Key(KeyCode::Char('c').into()) {
+        println!("Cursor position: {:?}\r", position());
+    }
+
+    if event == Event::Key(KeyCode::Esc.into()) {
+        return false;
+    }
+    let (x, y) = position().unwrap_or_default();
+    let (max_x, googa) = size().unwrap_or_default();
+    execute!(stdo, cursor::MoveTo(0, googa)).unwrap();
+    let mode_text = match *mode {
+        Mode::Draw => "DRAW",
+        Mode::Insert => "INSERT",
+    };
+    print!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa})");
+    execute!(stdo, cursor::MoveTo(x, y)).unwrap();
+    true
+}
+
+async fn event_handler() {
     let mut reader = EventStream::new();
     let mut previous_char = '*';
     let mut brush = '*';
@@ -43,58 +112,10 @@ async fn print_events() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match event {
-                            Event::Mouse(ev) => {
-                                if mode == Mode::Draw {
-                                    match ev.kind {
-                                        MouseEventKind::Drag(_) |
-                                        MouseEventKind::Down(_) => {
-                                            execute!(stdo, cursor::MoveTo(ev.column, ev.row)).unwrap();
-                                            print!("{brush}");
-                                        },
-                                        _ => {}
-                                    }
-                                }
-                            },
-                            Event::Key(ev) => {
-                                if ev.modifiers == KeyModifiers::SHIFT {
-                                    print!("{:?}", ev);
-                                }
-
-                                match ev.code {
-                                    KeyCode::Char(code) => {
-                                        if mode == Mode::Insert {
-                                            print!("{}", code);
-                                            execute!(stdo, cursor::MoveRight(1)).unwrap();
-                                        }
-                                        brush = code;
-                                        if code == previous_char {
-                                            mode = match code {
-                                                'i' => Mode::Insert,
-                                                'd' => Mode::Draw,
-                                                _ => mode
-                                            }
-
-                                        }
-                                        previous_char = code;
-                                    },
-                                    _ => {}
-                                }
-                            }
-                            _ => {}
+                        match draw(event, &mut stdo, &mut previous_char, &mut brush, &mut mode) {
+                            false => break,
+                            true => {}
                         };
-                        if event == Event::Key(KeyCode::Char('c').into()) {
-                            println!("Cursor position: {:?}\r", position());
-                        }
-
-                        if event == Event::Key(KeyCode::Esc.into()) {
-                            break;
-                        }
-                        let (x, y) = position().unwrap_or_default();
-                        let (max_x, googa)= size().unwrap_or_default();
-                        execute!(stdo, cursor::MoveTo( 0, googa)).unwrap();
-                        print!("INSERT MODE, {max_x}, {googa}");
-                        execute!(stdo, cursor::MoveTo( x, y )).unwrap();
                     }
                     Some(Err(e)) => println!("Error: {:?}\r", e),
                     None => break,
@@ -118,7 +139,7 @@ async fn main() -> Result<()> {
         cursor::Hide
     )?;
 
-    print_events().await;
+    event_handler().await;
 
     execute!(stdout, DisableMouseCapture)?;
 
