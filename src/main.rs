@@ -81,6 +81,19 @@ fn draw(
                     }
                     *previous_char = code;
                 }
+                KeyCode::Left => {
+                    execute!(stdo, cursor::MoveLeft(1)).unwrap();
+                }
+                KeyCode::Right => {
+                    execute!(stdo, cursor::MoveRight(1)).unwrap();
+                }
+                KeyCode::Up => {
+                    execute!(stdo, cursor::MoveUp(1)).unwrap();
+                }
+                KeyCode::Down => {
+                    execute!(stdo, cursor::MoveDown(1)).unwrap();
+                }
+                //  | KeyCode::Up | KeyCode::Down
                 KeyCode::Backspace => {
                     execute!(
                         stdo,
