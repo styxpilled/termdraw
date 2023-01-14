@@ -28,17 +28,15 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
 enum Mode {
     Draw,
     Insert,
+    Command,
 }
 
-fn draw(
-    event: Event,
-    stdo: &mut Stdout,
-    previous_char: &mut char,
-    brush: &mut char,
-    mode: &mut Mode,
-) -> bool {
+fn draw(event: Event, stdo: &mut Stdout, brush: &mut char, mode: &mut Mode) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
-        return false;
+        if *mode == Mode::Command {
+            return false;
+        }
+        *mode = Mode::Command;
     }
     match event {
         Event::Mouse(ev) => {
@@ -62,24 +60,27 @@ fn draw(
             // }
             match ev.code {
                 KeyCode::Char(code) => {
-                    if *mode == Mode::Insert {
-                        execute!(stdo, crossterm::style::Print(code),).unwrap();
-                    }
-                    *brush = code;
-                    if code == *previous_char {
-                        *mode = match code {
-                            'i' => {
-                                execute!(stdo, cursor::Show).unwrap();
-                                Mode::Insert
+                    match *mode {
+                        Mode::Command => {
+                            *mode = match code {
+                                'i' => {
+                                    execute!(stdo, cursor::Show).unwrap();
+                                    Mode::Insert
+                                }
+                                'd' => {
+                                    execute!(stdo, cursor::Hide).unwrap();
+                                    Mode::Draw
+                                }
+                                _ => *mode,
                             }
-                            'd' => {
-                                execute!(stdo, cursor::Hide).unwrap();
-                                Mode::Draw
-                            }
-                            _ => *mode,
                         }
-                    }
-                    *previous_char = code;
+                        Mode::Insert => {
+                            execute!(stdo, crossterm::style::Print(code),).unwrap();
+                        }
+                        Mode::Draw => {
+                            *brush = code;
+                        }
+                    };
                 }
                 KeyCode::Left => {
                     execute!(stdo, cursor::MoveLeft(1)).unwrap();
@@ -112,8 +113,9 @@ fn draw(
     let (max_x, googa) = size().unwrap_or_default();
     execute!(stdo, cursor::MoveTo(0, googa)).unwrap();
     let mode_text = match *mode {
-        Mode::Draw => "DRAW",
+        Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
+        Mode::Draw => "DRAW",
     };
     print!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa})");
     execute!(stdo, cursor::MoveTo(x, y)).unwrap();
@@ -122,7 +124,6 @@ fn draw(
 
 async fn event_handler() {
     let mut reader = EventStream::new();
-    let mut previous_char = '*';
     let mut brush = '*';
     let mut mode = Mode::Draw;
 
@@ -136,7 +137,7 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdo, &mut previous_char, &mut brush, &mut mode) {
+                        match draw(event, &mut stdo, &mut brush, &mut mode) {
                             false => break,
                             true => {}
                         };
