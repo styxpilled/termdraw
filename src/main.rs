@@ -46,7 +46,7 @@ fn draw(event: Event, stdo: &mut Stdout, brush: &mut char, mode: &mut Mode) -> b
                         execute!(
                             stdo,
                             cursor::MoveTo(ev.column, ev.row),
-                            crossterm::style::Print(brush)
+                            crossterm::style::Print(*brush)
                         )
                         .unwrap();
                     }
@@ -70,6 +70,10 @@ fn draw(event: Event, stdo: &mut Stdout, brush: &mut char, mode: &mut Mode) -> b
                                 'd' => {
                                     execute!(stdo, cursor::Hide).unwrap();
                                     Mode::Draw
+                                }
+                                'q' => {
+                                    execute!(stdo, Clear(ClearType::All)).unwrap();
+                                    Mode::Command
                                 }
                                 _ => *mode,
                             }
@@ -117,7 +121,10 @@ fn draw(event: Event, stdo: &mut Stdout, brush: &mut char, mode: &mut Mode) -> b
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
     };
-    print!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa})");
+    print!(
+        "{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), brush: {}",
+        brush.clone()
+    );
     execute!(stdo, cursor::MoveTo(x, y)).unwrap();
     true
 }
