@@ -1,5 +1,4 @@
 use std::{
-    fmt::format,
     io::{stdout, Stdout},
     time::Duration,
 };
@@ -12,7 +11,7 @@ use crossterm::{
     cursor::position,
     event::{
         DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
-        MouseEventKind,
+        MouseButton, MouseEventKind,
     },
     execute,
     style::{Color, SetForegroundColor},
@@ -48,6 +47,7 @@ fn draw(
     brush: &mut char,
     mode: &mut Mode,
     command: &mut Command,
+    drag_pos: &mut (u16, u16),
 ) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
         if *mode == Mode::Command {
@@ -117,21 +117,81 @@ fn draw(
             };
         }
         Mode::Draw => match event {
-            Event::Mouse(ev) => {
-                if *mode == Mode::Draw {
-                    match ev.kind {
-                        MouseEventKind::Drag(_) | MouseEventKind::Down(_) => {
-                            execute!(
-                                stdout,
-                                cursor::MoveTo(ev.column, ev.row),
-                                crossterm::style::Print(*brush)
-                            )
-                            .unwrap();
-                        }
-                        _ => {}
-                    }
+            Event::Mouse(ev) => match ev.kind {
+                MouseEventKind::Drag(MouseButton::Left)
+                | MouseEventKind::Down(MouseButton::Left) => {
+                    execute!(
+                        stdout,
+                        cursor::MoveTo(ev.column, ev.row),
+                        crossterm::style::Print(*brush)
+                    )
+                    .unwrap();
                 }
-            }
+                MouseEventKind::Down(MouseButton::Right) => {
+                    *drag_pos = position().unwrap_or_default();
+                }
+                MouseEventKind::Drag(MouseButton::Right) => {
+                    execute!(
+                        stdout,
+                        // thing
+                        cursor::MoveTo(drag_pos.0, drag_pos.1),
+                        // crossterm::style::Print(*brush)
+                    )
+                    .unwrap();
+                    for _ in drag_pos.0..ev.column {
+                        execute!(
+                            stdout,
+                            // thing
+                            // cursor::MoveRight(1),
+                            crossterm::style::Print(*brush),
+                        )
+                        .unwrap();
+                    }
+                    for _ in drag_pos.1..ev.row {
+                        execute!(
+                            stdout,
+                            // thing
+                            crossterm::style::Print(*brush),
+                            cursor::MoveLeft(1),
+                            cursor::MoveDown(1)
+                        )
+                        .unwrap();
+                    }
+                    execute!(
+                        stdout,
+                        // thing
+                        cursor::MoveTo(drag_pos.0, drag_pos.1),
+                        // crossterm::style::Print(*brush)
+                    )
+                    .unwrap();
+                    for _ in drag_pos.1..ev.row {
+                        execute!(
+                            stdout,
+                            // thing
+                            crossterm::style::Print(*brush),
+                            cursor::MoveLeft(1),
+                            cursor::MoveDown(1)
+                        )
+                        .unwrap();
+                    }
+                    for _ in drag_pos.0..ev.column {
+                        execute!(
+                            stdout,
+                            // thing
+                            // cursor::MoveRight(1),
+                            crossterm::style::Print(*brush),
+                        )
+                        .unwrap();
+                    }
+                    // let thing: Vec<(cursor::MoveLeft, crossterm::style::Print<char>)> = (drag_pos.0
+                    //     ..position().unwrap_or_default().0)
+                    //     .map(|f| (cursor::MoveLeft(1), crossterm::style::Print(*brush)))
+                    //     .collect();
+
+                    // thing.
+                }
+                _ => {}
+            },
             Event::Key(ev) => match ev.code {
                 KeyCode::Char(code) => {
                     *brush = code;
@@ -158,7 +218,8 @@ fn draw(
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
     };
-    let info_display = format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), brush: {}, last command: {:?}",
+    let info_display = format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: {}, last command: {:?}",
+    drag_pos.0, drag_pos.1,
     brush.clone(), command);
     let pad = " ".repeat(max_x as usize - info_display.len());
     print!("{info_display}{pad}");
@@ -176,6 +237,7 @@ async fn event_handler() {
     let mut brush = '*';
     let mut mode = Mode::Draw;
     let mut command = Command::None;
+    let mut drag_pos: (u16, u16) = (0, 0);
 
     loop {
         let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
@@ -187,7 +249,7 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdout, &mut brush, &mut mode, &mut command) {
+                        match draw(event, &mut stdout, &mut brush, &mut mode, &mut command, &mut drag_pos) {
                             false => break,
                             true => {}
                         };
