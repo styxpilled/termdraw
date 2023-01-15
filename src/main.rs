@@ -1,4 +1,5 @@
 use std::{
+    fmt::format,
     io::{stdout, Stdout},
     time::Duration,
 };
@@ -14,6 +15,7 @@ use crossterm::{
         MouseEventKind,
     },
     execute,
+    style::{Color, SetForegroundColor},
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
@@ -31,33 +33,51 @@ enum Mode {
     Command,
 }
 
-fn draw(event: Event, stdout: &mut Stdout, brush: &mut char, mode: &mut Mode) -> bool {
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum Command {
+    EnterCommandMode,
+    EnterInsertMode,
+    EnterDrawMode,
+    Clear,
+    None,
+}
+
+fn draw(
+    event: Event,
+    stdout: &mut Stdout,
+    brush: &mut char,
+    mode: &mut Mode,
+    command: &mut Command,
+) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
         if *mode == Mode::Command {
             return false;
         }
         execute!(stdout, cursor::Hide).unwrap();
         *mode = Mode::Command;
+        *command = Command::EnterCommandMode;
     }
 
     match *mode {
         Mode::Command => match event {
             Event::Key(ev) => match ev.code {
                 KeyCode::Char(code) => {
-                    *mode = match code {
+                    *command = match code {
                         'i' => {
                             execute!(stdout, cursor::Show).unwrap();
-                            Mode::Insert
+                            *mode = Mode::Insert;
+                            Command::EnterInsertMode
                         }
                         'd' => {
                             execute!(stdout, cursor::Hide).unwrap();
-                            Mode::Draw
+                            *mode = Mode::Draw;
+                            Command::EnterDrawMode
                         }
                         'q' => {
                             execute!(stdout, Clear(ClearType::All)).unwrap();
-                            Mode::Command
+                            Command::Clear
                         }
-                        _ => *mode,
+                        _ => *command,
                     }
                 }
                 _ => {}
@@ -127,17 +147,27 @@ fn draw(event: Event, stdout: &mut Stdout, brush: &mut char, mode: &mut Mode) ->
 
     let (x, y) = position().unwrap_or_default();
     let (max_x, googa) = size().unwrap_or_default();
-    execute!(stdout, cursor::MoveTo(0, googa)).unwrap();
+    execute!(
+        stdout,
+        cursor::MoveTo(0, googa),
+        SetForegroundColor(Color::Red)
+    )
+    .unwrap();
     let mode_text = match *mode {
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
     };
-    print!(
-        "{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), brush: {}",
-        brush.clone()
-    );
-    execute!(stdout, cursor::MoveTo(x, y)).unwrap();
+    let info_display = format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), brush: {}, last command: {:?}",
+    brush.clone(), command);
+    let pad = " ".repeat(max_x as usize - info_display.len());
+    print!("{info_display}{pad}");
+    execute!(
+        stdout,
+        cursor::MoveTo(x, y),
+        SetForegroundColor(Color::White)
+    )
+    .unwrap();
     true
 }
 
@@ -145,6 +175,7 @@ async fn event_handler() {
     let mut reader = EventStream::new();
     let mut brush = '*';
     let mut mode = Mode::Draw;
+    let mut command = Command::None;
 
     loop {
         let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
@@ -156,7 +187,7 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdout, &mut brush, &mut mode) {
+                        match draw(event, &mut stdout, &mut brush, &mut mode, &mut command) {
                             false => break,
                             true => {}
                         };
