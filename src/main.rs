@@ -16,7 +16,7 @@ use crossterm::{
     execute, queue,
     style::{Color, SetForegroundColor},
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
-    ExecutableCommand, Result,
+    Result,
 };
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
@@ -213,6 +213,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             queue!(
                 stdout,
                 cursor::MoveTo(layer.x, layer.y),
+                SetForegroundColor(layer.brush_color),
                 crossterm::style::Print(layer.brush)
             )
             .unwrap();
