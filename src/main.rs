@@ -198,11 +198,15 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
     };
-    let info_display = format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: {}, last command: {:?}",
-    state.drag_pos.0, state.drag_pos.1,
-    state.brush, state.command);
-    let pad = " ".repeat(max_x as usize - info_display.len());
-    print!("{info_display}{pad}");
+    let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
+    state.drag_pos.0, state.drag_pos.1),
+    format!(", last command: {:?}", state.command));
+    let pad = " ".repeat(max_x as usize - (info_display.0.len() + info_display.1.len()));
+    print!("{}", info_display.0);
+    execute!(stdout, SetForegroundColor(state.brush_color)).unwrap();
+    print!("{}", state.brush);
+    execute!(stdout, SetForegroundColor(Color::Red)).unwrap();
+    print!("{pad}");
     execute!(
         stdout,
         cursor::MoveTo(x, y),
