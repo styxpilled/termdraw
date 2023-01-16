@@ -28,6 +28,7 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
 struct State {
     mode: Mode,
     brush: char,
+    brush_color: Color,
     command: Command,
     drag_pos: (u16, u16),
 }
@@ -48,7 +49,7 @@ enum Command {
     None,
 }
 
-fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
+fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color>) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
         if state.mode == Mode::Command {
             return false;
@@ -57,6 +58,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
         state.mode = Mode::Command;
         state.command = Command::EnterCommandMode;
     }
+
+    execute!(stdout, SetForegroundColor(state.brush_color)).unwrap();
 
     match state.mode {
         Mode::Command => match event {
@@ -76,6 +79,15 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
                         'q' => {
                             execute!(stdout, Clear(ClearType::All)).unwrap();
                             Command::Clear
+                        }
+                        'f' => {
+                            let n = colors
+                                .iter()
+                                .position(|n| n == &state.brush_color)
+                                .unwrap_or_default();
+                            let index = if n + 1 < colors.len() { n + 1 } else { 0 };
+                            state.brush_color = colors[index];
+                            Command::None
                         }
                         _ => state.command,
                     }
@@ -206,8 +218,32 @@ async fn event_handler() {
     let mut state = State {
         mode: Mode::Command,
         brush: '*',
+        brush_color: Color::White,
         command: Command::None,
         drag_pos: (0, 0),
+    };
+
+    let colors: Vec<Color> = {
+        use Color::*;
+        vec![
+            // Reset,
+            White,
+            Grey,
+            Black,
+            DarkGrey,
+            Red,
+            DarkRed,
+            Green,
+            DarkGreen,
+            Yellow,
+            DarkYellow,
+            Blue,
+            DarkBlue,
+            Magenta,
+            DarkMagenta,
+            Cyan,
+            DarkCyan,
+        ]
     };
 
     loop {
@@ -220,7 +256,7 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdout, &mut state) {
+                        match draw(event, &mut stdout, &mut state, &colors) {
                             false => break,
                             true => {}
                         };
