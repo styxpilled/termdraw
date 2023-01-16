@@ -1,5 +1,5 @@
 use std::{
-    io::{stdout, Stdout},
+    io::{stdout, Stdout, Write},
     time::Duration,
 };
 
@@ -13,7 +13,7 @@ use crossterm::{
         DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, MouseButton,
         MouseEventKind,
     },
-    execute,
+    execute, queue,
     style::{Color, SetForegroundColor},
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
@@ -54,12 +54,12 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         if state.mode == Mode::Command {
             return false;
         }
-        execute!(stdout, cursor::Hide).unwrap();
+        queue!(stdout, cursor::Hide).unwrap();
         state.mode = Mode::Command;
         state.command = Command::EnterCommandMode;
     }
 
-    execute!(stdout, SetForegroundColor(state.brush_color)).unwrap();
+    queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
 
     match state.mode {
         Mode::Command => match event {
@@ -67,17 +67,17 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                 KeyCode::Char(code) => {
                     state.command = match code {
                         'i' => {
-                            execute!(stdout, cursor::Show).unwrap();
+                            queue!(stdout, cursor::Show).unwrap();
                             state.mode = Mode::Insert;
                             Command::EnterInsertMode
                         }
                         'd' => {
-                            execute!(stdout, cursor::Hide).unwrap();
+                            queue!(stdout, cursor::Hide).unwrap();
                             state.mode = Mode::Draw;
                             Command::EnterDrawMode
                         }
                         'q' => {
-                            execute!(stdout, Clear(ClearType::All)).unwrap();
+                            queue!(stdout, Clear(ClearType::All)).unwrap();
                             Command::Clear
                         }
                         'f' => {
@@ -100,22 +100,22 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             match event {
                 Event::Key(ev) => match ev.code {
                     KeyCode::Char(code) => {
-                        execute!(stdout, crossterm::style::Print(code),).unwrap();
+                        queue!(stdout, crossterm::style::Print(code),).unwrap();
                     }
                     KeyCode::Left => {
-                        execute!(stdout, cursor::MoveLeft(1)).unwrap();
+                        queue!(stdout, cursor::MoveLeft(1)).unwrap();
                     }
                     KeyCode::Right => {
-                        execute!(stdout, cursor::MoveRight(1)).unwrap();
+                        queue!(stdout, cursor::MoveRight(1)).unwrap();
                     }
                     KeyCode::Up => {
-                        execute!(stdout, cursor::MoveUp(1)).unwrap();
+                        queue!(stdout, cursor::MoveUp(1)).unwrap();
                     }
                     KeyCode::Down => {
-                        execute!(stdout, cursor::MoveDown(1)).unwrap();
+                        queue!(stdout, cursor::MoveDown(1)).unwrap();
                     }
                     KeyCode::Backspace => {
-                        execute!(
+                        queue!(
                             stdout,
                             cursor::MoveLeft(1),
                             crossterm::style::Print(" "),
@@ -132,7 +132,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             Event::Mouse(ev) => match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left)
                 | MouseEventKind::Down(MouseButton::Left) => {
-                    execute!(
+                    queue!(
                         stdout,
                         cursor::MoveTo(ev.column, ev.row),
                         crossterm::style::Print(state.brush)
@@ -143,12 +143,12 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                     state.drag_pos = position().unwrap_or_default();
                 }
                 MouseEventKind::Drag(MouseButton::Right) => {
-                    execute!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
+                    queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
                     for _ in state.drag_pos.0..ev.column {
-                        execute!(stdout, crossterm::style::Print(state.brush),).unwrap();
+                        queue!(stdout, crossterm::style::Print(state.brush),).unwrap();
                     }
                     for _ in state.drag_pos.1..ev.row {
-                        execute!(
+                        queue!(
                             stdout,
                             crossterm::style::Print(state.brush),
                             cursor::MoveLeft(1),
@@ -156,9 +156,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         )
                         .unwrap();
                     }
-                    execute!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
+                    queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
                     for _ in state.drag_pos.1..ev.row {
-                        execute!(
+                        queue!(
                             stdout,
                             crossterm::style::Print(state.brush),
                             cursor::MoveLeft(1),
@@ -167,7 +167,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         .unwrap();
                     }
                     for _ in state.drag_pos.0..ev.column {
-                        execute!(stdout, crossterm::style::Print(state.brush),).unwrap();
+                        queue!(stdout, crossterm::style::Print(state.brush),).unwrap();
                     }
                 }
                 _ => {}
@@ -187,7 +187,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
 
     let (x, y) = position().unwrap_or_default();
     let (max_x, googa) = size().unwrap_or_default();
-    execute!(
+    queue!(
         stdout,
         cursor::MoveTo(0, googa),
         SetForegroundColor(Color::Red)
@@ -203,16 +203,17 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     format!(", last command: {:?}", state.command));
     let pad = " ".repeat(max_x as usize - (info_display.0.len() + info_display.1.len()));
     print!("{}", info_display.0);
-    execute!(stdout, SetForegroundColor(state.brush_color)).unwrap();
+    queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
     print!("{}", state.brush);
-    execute!(stdout, SetForegroundColor(Color::Red)).unwrap();
+    queue!(stdout, SetForegroundColor(Color::Red)).unwrap();
     print!("{pad}");
-    execute!(
+    queue!(
         stdout,
         cursor::MoveTo(x, y),
         SetForegroundColor(Color::White)
     )
     .unwrap();
+    stdout.flush().unwrap();
     true
 }
 
