@@ -16,7 +16,7 @@ use crossterm::{
     execute, queue,
     style::{Color, SetForegroundColor},
     terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
-    Result,
+    ExecutableCommand, Result,
 };
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
@@ -25,12 +25,21 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Use Esc to quit
 "#;
 
+#[derive(Copy, Clone)]
+struct Layer {
+    brush: char,
+    brush_color: Color,
+    x: u16,
+    y: u16,
+}
+
 struct State {
     mode: Mode,
     brush: char,
     brush_color: Color,
     command: Command,
     drag_pos: (u16, u16),
+    layers: Vec<Layer>,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -58,6 +67,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         state.mode = Mode::Command;
         state.command = Command::EnterCommandMode;
     }
+
+    let mut need_repaint = false;
 
     queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
 
@@ -87,6 +98,12 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                                 .unwrap_or_default();
                             let index = if n + 1 < colors.len() { n + 1 } else { 0 };
                             state.brush_color = colors[index];
+                            Command::None
+                        }
+                        'u' => {
+                            queue!(stdout, Clear(ClearType::All)).unwrap();
+                            state.layers.pop();
+                            need_repaint = true;
                             Command::None
                         }
                         _ => state.command,
@@ -132,12 +149,19 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             Event::Mouse(ev) => match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left)
                 | MouseEventKind::Down(MouseButton::Left) => {
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(ev.column, ev.row),
-                        crossterm::style::Print(state.brush)
-                    )
-                    .unwrap();
+                    // queue!(
+                    //     stdout,
+                    //     cursor::MoveTo(ev.column, ev.row),
+                    //     crossterm::style::Print(state.brush)
+                    // )
+                    // .unwrap();
+                    state.layers.push(Layer {
+                        brush: state.brush,
+                        brush_color: state.brush_color,
+                        x: ev.column,
+                        y: ev.row,
+                    });
+                    need_repaint = true;
                 }
                 MouseEventKind::Down(MouseButton::Right) => {
                     state.drag_pos = position().unwrap_or_default();
@@ -184,6 +208,16 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
     // }
+    if need_repaint {
+        for layer in state.layers.clone() {
+            queue!(
+                stdout,
+                cursor::MoveTo(layer.x, layer.y),
+                crossterm::style::Print(layer.brush)
+            )
+            .unwrap();
+        }
+    }
 
     let (x, y) = position().unwrap_or_default();
     let (max_x, googa) = size().unwrap_or_default();
@@ -226,6 +260,7 @@ async fn event_handler() {
         brush_color: Color::White,
         command: Command::None,
         drag_pos: (0, 0),
+        layers: vec![],
     };
 
     let colors: Vec<Color> = {
