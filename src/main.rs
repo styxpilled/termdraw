@@ -10,8 +10,8 @@ use crossterm::{
     cursor,
     cursor::position,
     event::{
-        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
-        MouseButton, MouseEventKind,
+        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, MouseButton,
+        MouseEventKind,
     },
     execute,
     style::{Color, SetForegroundColor},
@@ -24,6 +24,13 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Hit "c" to print current cursor position
  - Use Esc to quit
 "#;
+
+struct State {
+    mode: Mode,
+    brush: char,
+    command: Command,
+    drag_pos: (u16, u16),
+}
 
 #[derive(PartialEq, Clone, Copy)]
 enum Mode {
@@ -41,43 +48,36 @@ enum Command {
     None,
 }
 
-fn draw(
-    event: Event,
-    stdout: &mut Stdout,
-    brush: &mut char,
-    mode: &mut Mode,
-    command: &mut Command,
-    drag_pos: &mut (u16, u16),
-) -> bool {
+fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
-        if *mode == Mode::Command {
+        if state.mode == Mode::Command {
             return false;
         }
         execute!(stdout, cursor::Hide).unwrap();
-        *mode = Mode::Command;
-        *command = Command::EnterCommandMode;
+        state.mode = Mode::Command;
+        state.command = Command::EnterCommandMode;
     }
 
-    match *mode {
+    match state.mode {
         Mode::Command => match event {
             Event::Key(ev) => match ev.code {
                 KeyCode::Char(code) => {
-                    *command = match code {
+                    state.command = match code {
                         'i' => {
                             execute!(stdout, cursor::Show).unwrap();
-                            *mode = Mode::Insert;
+                            state.mode = Mode::Insert;
                             Command::EnterInsertMode
                         }
                         'd' => {
                             execute!(stdout, cursor::Hide).unwrap();
-                            *mode = Mode::Draw;
+                            state.mode = Mode::Draw;
                             Command::EnterDrawMode
                         }
                         'q' => {
                             execute!(stdout, Clear(ClearType::All)).unwrap();
                             Command::Clear
                         }
-                        _ => *command,
+                        _ => state.command,
                     }
                 }
                 _ => {}
@@ -123,78 +123,46 @@ fn draw(
                     execute!(
                         stdout,
                         cursor::MoveTo(ev.column, ev.row),
-                        crossterm::style::Print(*brush)
+                        crossterm::style::Print(state.brush)
                     )
                     .unwrap();
                 }
                 MouseEventKind::Down(MouseButton::Right) => {
-                    *drag_pos = position().unwrap_or_default();
+                    state.drag_pos = position().unwrap_or_default();
                 }
                 MouseEventKind::Drag(MouseButton::Right) => {
-                    execute!(
-                        stdout,
-                        // thing
-                        cursor::MoveTo(drag_pos.0, drag_pos.1),
-                        // crossterm::style::Print(*brush)
-                    )
-                    .unwrap();
-                    for _ in drag_pos.0..ev.column {
-                        execute!(
-                            stdout,
-                            // thing
-                            // cursor::MoveRight(1),
-                            crossterm::style::Print(*brush),
-                        )
-                        .unwrap();
+                    execute!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
+                    for _ in state.drag_pos.0..ev.column {
+                        execute!(stdout, crossterm::style::Print(state.brush),).unwrap();
                     }
-                    for _ in drag_pos.1..ev.row {
+                    for _ in state.drag_pos.1..ev.row {
                         execute!(
                             stdout,
-                            // thing
-                            crossterm::style::Print(*brush),
+                            crossterm::style::Print(state.brush),
                             cursor::MoveLeft(1),
                             cursor::MoveDown(1)
                         )
                         .unwrap();
                     }
-                    execute!(
-                        stdout,
-                        // thing
-                        cursor::MoveTo(drag_pos.0, drag_pos.1),
-                        // crossterm::style::Print(*brush)
-                    )
-                    .unwrap();
-                    for _ in drag_pos.1..ev.row {
+                    execute!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
+                    for _ in state.drag_pos.1..ev.row {
                         execute!(
                             stdout,
-                            // thing
-                            crossterm::style::Print(*brush),
+                            crossterm::style::Print(state.brush),
                             cursor::MoveLeft(1),
                             cursor::MoveDown(1)
                         )
                         .unwrap();
                     }
-                    for _ in drag_pos.0..ev.column {
-                        execute!(
-                            stdout,
-                            // thing
-                            // cursor::MoveRight(1),
-                            crossterm::style::Print(*brush),
-                        )
-                        .unwrap();
+                    for _ in state.drag_pos.0..ev.column {
+                        execute!(stdout, crossterm::style::Print(state.brush),).unwrap();
                     }
-                    // let thing: Vec<(cursor::MoveLeft, crossterm::style::Print<char>)> = (drag_pos.0
-                    //     ..position().unwrap_or_default().0)
-                    //     .map(|f| (cursor::MoveLeft(1), crossterm::style::Print(*brush)))
-                    //     .collect();
-
-                    // thing.
                 }
                 _ => {}
             },
             Event::Key(ev) => match ev.code {
                 KeyCode::Char(code) => {
-                    *brush = code;
+                    state.brush = code;
                 }
                 _ => {}
             },
@@ -213,14 +181,14 @@ fn draw(
         SetForegroundColor(Color::Red)
     )
     .unwrap();
-    let mode_text = match *mode {
+    let mode_text = match state.mode {
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
     };
     let info_display = format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: {}, last command: {:?}",
-    drag_pos.0, drag_pos.1,
-    brush.clone(), command);
+    state.drag_pos.0, state.drag_pos.1,
+    state.brush, state.command);
     let pad = " ".repeat(max_x as usize - info_display.len());
     print!("{info_display}{pad}");
     execute!(
@@ -234,10 +202,13 @@ fn draw(
 
 async fn event_handler() {
     let mut reader = EventStream::new();
-    let mut brush = '*';
-    let mut mode = Mode::Draw;
-    let mut command = Command::None;
-    let mut drag_pos: (u16, u16) = (0, 0);
+    // let mut brush_color = Color::White;
+    let mut state = State {
+        mode: Mode::Command,
+        brush: '*',
+        command: Command::None,
+        drag_pos: (0, 0),
+    };
 
     loop {
         let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
@@ -249,7 +220,7 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdout, &mut brush, &mut mode, &mut command, &mut drag_pos) {
+                        match draw(event, &mut stdout, &mut state) {
                             false => break,
                             true => {}
                         };
