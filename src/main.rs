@@ -367,6 +367,14 @@ async fn event_handler() {
         ]
     };
 
+    let mut stdoout_temp = stdout();
+    draw(
+        crossterm::event::Event::FocusGained,
+        &mut stdoout_temp,
+        &mut state,
+        &colors,
+    );
+
     loop {
         let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
         let mut event = reader.next().fuse();
