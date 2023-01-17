@@ -55,6 +55,7 @@ enum Command {
     EnterInsertMode,
     EnterDrawMode,
     Clear,
+    Undo,
     None,
 }
 
@@ -89,6 +90,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         }
                         'q' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
+                            state.layers = vec![];
+                            need_repaint = true;
                             Command::Clear
                         }
                         'f' => {
@@ -98,7 +101,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                                 .unwrap_or_default();
                             let index = if n + 1 < colors.len() { n + 1 } else { 0 };
                             state.brush_color = colors[index];
-                            Command::None
+                            Command::Undo
                         }
                         'u' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
