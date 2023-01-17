@@ -39,7 +39,8 @@ struct State {
     brush_color: Color,
     command: Command,
     drag_pos: (u16, u16),
-    layers: Vec<Layer>,
+    history: Vec<Layer>,
+    redo_layers: Vec<Layer>,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -56,6 +57,7 @@ enum Command {
     EnterDrawMode,
     Clear,
     Undo,
+    Redo,
     None,
 }
 
@@ -90,7 +92,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         }
                         'q' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
-                            state.layers = vec![];
+                            state.history = vec![];
                             need_repaint = true;
                             Command::Clear
                         }
@@ -105,9 +107,20 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         }
                         'u' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
-                            state.layers.pop();
+                            let undo = state.history.pop();
+                            if undo.is_some() {
+                                state.redo_layers.push(undo.unwrap());
+                            }
                             need_repaint = true;
-                            Command::None
+                            Command::Undo
+                        }
+                        'y' => {
+                            let redo = state.redo_layers.pop();
+                            if redo.is_some() {
+                                state.history.push(redo.unwrap());
+                            }
+                            need_repaint = true;
+                            Command::Redo
                         }
                         _ => state.command,
                     }
@@ -158,12 +171,13 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                     //     crossterm::style::Print(state.brush)
                     // )
                     // .unwrap();
-                    state.layers.push(Layer {
+                    state.history.push(Layer {
                         brush: state.brush,
                         brush_color: state.brush_color,
                         x: ev.column,
                         y: ev.row,
                     });
+                    state.redo_layers = vec![];
                     need_repaint = true;
                 }
                 MouseEventKind::Down(MouseButton::Right) => {
@@ -212,7 +226,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     //     print!("{:?}", ev);
     // }
     if need_repaint {
-        for layer in state.layers.clone() {
+        for layer in state.history.clone() {
             queue!(
                 stdout,
                 cursor::MoveTo(layer.x, layer.y),
@@ -264,7 +278,8 @@ async fn event_handler() {
         brush_color: Color::White,
         command: Command::None,
         drag_pos: (0, 0),
-        layers: vec![],
+        history: vec![],
+        redo_layers: vec![],
     };
 
     let colors: Vec<Color> = {
