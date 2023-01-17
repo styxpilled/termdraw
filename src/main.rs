@@ -33,14 +33,36 @@ struct Layer {
     y: u16,
 }
 
+#[derive(Copy, Clone)]
+enum Cmdnum {
+    MoveLeft(u16),
+    MoveRight(u16),
+    MoveUp(u16),
+    MoveDown(u16),
+    MoveTo(u16, u16),
+}
+
+#[derive(Copy, Clone)]
+struct TextLayer {
+    brush: char,
+    color: Color,
+}
+
+#[derive(Copy, Clone)]
+enum HistoryPage {
+    Insert(TextLayer),
+    Draw(Layer),
+    Cmd(Cmdnum),
+}
+
 struct State {
     mode: Mode,
     brush: char,
     brush_color: Color,
     command: Command,
     drag_pos: (u16, u16),
-    history: Vec<Layer>,
-    redo_layers: Vec<Layer>,
+    history: Vec<HistoryPage>,
+    redo_layers: Vec<HistoryPage>,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -133,19 +155,33 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             match event {
                 Event::Key(ev) => match ev.code {
                     KeyCode::Char(code) => {
-                        queue!(stdout, crossterm::style::Print(code),).unwrap();
+                        state.history.push(HistoryPage::Insert(TextLayer {
+                            brush: code,
+                            color: state.brush_color,
+                        }));
+                        state.redo_layers = vec![];
+                        need_repaint = true;
+                        // queue!(stdout, crossterm::style::Print(code),).unwrap();
                     }
                     KeyCode::Left => {
-                        queue!(stdout, cursor::MoveLeft(1)).unwrap();
+                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveLeft(1)));
+                        state.redo_layers = vec![];
+                        need_repaint = true;
                     }
                     KeyCode::Right => {
-                        queue!(stdout, cursor::MoveRight(1)).unwrap();
+                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveRight(1)));
+                        state.redo_layers = vec![];
+                        need_repaint = true;
                     }
                     KeyCode::Up => {
-                        queue!(stdout, cursor::MoveUp(1)).unwrap();
+                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveUp(1)));
+                        state.redo_layers = vec![];
+                        need_repaint = true;
                     }
                     KeyCode::Down => {
-                        queue!(stdout, cursor::MoveDown(1)).unwrap();
+                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveDown(1)));
+                        state.redo_layers = vec![];
+                        need_repaint = true;
                     }
                     KeyCode::Backspace => {
                         queue!(
@@ -171,12 +207,12 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                     //     crossterm::style::Print(state.brush)
                     // )
                     // .unwrap();
-                    state.history.push(Layer {
+                    state.history.push(HistoryPage::Draw(Layer {
                         brush: state.brush,
                         brush_color: state.brush_color,
                         x: ev.column,
                         y: ev.row,
-                    });
+                    }));
                     state.redo_layers = vec![];
                     need_repaint = true;
                 }
@@ -226,15 +262,41 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     //     print!("{:?}", ev);
     // }
     if need_repaint {
-        for layer in state.history.clone() {
-            queue!(
-                stdout,
-                cursor::MoveTo(layer.x, layer.y),
-                SetForegroundColor(layer.brush_color),
-                crossterm::style::Print(layer.brush)
-            )
-            .unwrap();
+        for page in state.history.clone() {
+            match page {
+                HistoryPage::Draw(page) => {
+                    queue!(
+                        stdout,
+                        cursor::MoveTo(page.x, page.y),
+                        SetForegroundColor(page.brush_color),
+                        crossterm::style::Print(page.brush)
+                    )
+                    .unwrap();
+                }
+                HistoryPage::Insert(page) => {
+                    queue!(
+                        stdout,
+                        SetForegroundColor(page.color),
+                        crossterm::style::Print(page.brush)
+                    )
+                    .unwrap();
+                }
+                HistoryPage::Cmd(cmd) => match cmd {
+                    Cmdnum::MoveLeft(n) => queue!(stdout, cursor::MoveLeft(n)).unwrap(),
+                    Cmdnum::MoveRight(n) => queue!(stdout, cursor::MoveRight(n)).unwrap(),
+                    Cmdnum::MoveUp(n) => queue!(stdout, cursor::MoveUp(n)).unwrap(),
+                    Cmdnum::MoveDown(n) => queue!(stdout, cursor::MoveDown(n)).unwrap(),
+                    Cmdnum::MoveTo(x, y) => queue!(stdout, cursor::MoveTo(x, y)).unwrap(),
+                },
+            }
         }
+    }
+
+    stdout.flush().unwrap();
+
+    match state.mode {
+        Mode::Insert => queue!(stdout, cursor::Show).unwrap(),
+        _ => {}
     }
 
     let (x, y) = position().unwrap_or_default();
@@ -339,6 +401,8 @@ async fn main() -> Result<()> {
         stdout,
         Clear(ClearType::All),
         EnableMouseCapture,
+        cursor::EnableBlinking,
+        cursor::SetCursorShape(cursor::CursorShape::Line),
         cursor::Hide
     )?;
 
