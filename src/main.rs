@@ -73,10 +73,12 @@ enum Mode {
     Draw,
     Insert,
     Command,
+    Eyedropper,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 enum Command {
+    EnterEyedropperMode,
     EnterCommandMode,
     EnterInsertMode,
     EnterDrawMode,
@@ -114,6 +116,11 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                             queue!(stdout, cursor::Hide).unwrap();
                             state.mode = Mode::Draw;
                             Command::EnterDrawMode
+                        }
+                        'e' => {
+                            queue!(stdout, cursor::Hide).unwrap();
+                            state.mode = Mode::Eyedropper;
+                            Command::EnterEyedropperMode
                         }
                         'q' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
@@ -269,6 +276,20 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             },
             _ => {}
         },
+        Mode::Eyedropper => match event {
+            Event::Mouse(ev) => match ev.kind {
+                MouseEventKind::Drag(MouseButton::Left)
+                | MouseEventKind::Down(MouseButton::Left) => {
+                    state.brush =
+                        state.virtual_display[usize::from(ev.column)][usize::from(ev.row)].brush;
+                    state.brush_color = state.virtual_display[usize::from(ev.column)]
+                        [usize::from(ev.row)]
+                    .brush_color;
+                }
+                _ => {}
+            },
+            _ => {}
+        },
     }
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
@@ -348,6 +369,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     )
     .unwrap();
     let mode_text = match state.mode {
+        Mode::Eyedropper => "EYEDROPPER",
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
         Mode::Draw => "DRAW",
