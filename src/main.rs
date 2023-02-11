@@ -15,7 +15,7 @@ use crossterm::{
     },
     execute, queue,
     style::{Color, SetForegroundColor},
-    terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
+    terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
@@ -31,6 +31,7 @@ struct Layer {
     brush_color: Color,
     x: u16,
     y: u16,
+    changed: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -56,12 +57,14 @@ enum HistoryPage {
 }
 
 struct State {
+    repaint_counter: u32,
     mode: Mode,
     brush: char,
     brush_color: Color,
     command: Command,
     drag_pos: (u16, u16),
     history: Vec<HistoryPage>,
+    virtual_display: Vec<Vec<Layer>>,
     redo_layers: Vec<HistoryPage>,
 }
 
@@ -210,12 +213,21 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                     state.history.push(HistoryPage::Draw(Layer {
                         brush: state.brush,
                         brush_color: state.brush_color,
+                        changed: true,
                         x: ev.column,
                         y: ev.row,
                     }));
+                    state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
+                        brush: state.brush,
+                        brush_color: state.brush_color,
+                        changed: true,
+                        x: ev.column,
+                        y: ev.row,
+                    };
                     state.redo_layers = vec![];
                     need_repaint = true;
                 }
+                // MouseEventKind::Up()
                 MouseEventKind::Down(MouseButton::Right) => {
                     state.drag_pos = position().unwrap_or_default();
                 }
@@ -261,35 +273,56 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
     // }
+    let mut repainted = vec![];
     if need_repaint {
-        for page in state.history.clone() {
-            match page {
-                HistoryPage::Draw(page) => {
+        state.repaint_counter += 1;
+        for (col_index, column) in state.virtual_display.iter().enumerate() {
+            for (i, element) in column.iter().enumerate() {
+                if element.changed {
                     queue!(
                         stdout,
-                        cursor::MoveTo(page.x, page.y),
-                        SetForegroundColor(page.brush_color),
-                        crossterm::style::Print(page.brush)
+                        cursor::MoveTo(element.x, element.y),
+                        SetForegroundColor(element.brush_color),
+                        crossterm::style::Print(element.brush)
                     )
                     .unwrap();
+                    repainted.push((col_index, i));
+                    // element.changed = false;
                 }
-                HistoryPage::Insert(page) => {
-                    queue!(
-                        stdout,
-                        SetForegroundColor(page.color),
-                        crossterm::style::Print(page.brush)
-                    )
-                    .unwrap();
-                }
-                HistoryPage::Cmd(cmd) => match cmd {
-                    Cmdnum::MoveLeft(n) => queue!(stdout, cursor::MoveLeft(n)).unwrap(),
-                    Cmdnum::MoveRight(n) => queue!(stdout, cursor::MoveRight(n)).unwrap(),
-                    Cmdnum::MoveUp(n) => queue!(stdout, cursor::MoveUp(n)).unwrap(),
-                    Cmdnum::MoveDown(n) => queue!(stdout, cursor::MoveDown(n)).unwrap(),
-                    Cmdnum::MoveTo(x, y) => queue!(stdout, cursor::MoveTo(x, y)).unwrap(),
-                },
             }
         }
+        // for page in state.history.clone() {
+        //     match page {
+        //         HistoryPage::Draw(page) => {
+        //             queue!(
+        //                 stdout,
+        //                 cursor::MoveTo(page.x, page.y),
+        //                 SetForegroundColor(page.brush_color),
+        //                 crossterm::style::Print(page.brush)
+        //             )
+        //             .unwrap();
+        //         }
+        //         HistoryPage::Insert(page) => {
+        //             queue!(
+        //                 stdout,
+        //                 SetForegroundColor(page.color),
+        //                 crossterm::style::Print(page.brush)
+        //             )
+        //             .unwrap();
+        //         }
+        //         HistoryPage::Cmd(cmd) => match cmd {
+        //             Cmdnum::MoveLeft(n) => queue!(stdout, cursor::MoveLeft(n)).unwrap(),
+        //             Cmdnum::MoveRight(n) => queue!(stdout, cursor::MoveRight(n)).unwrap(),
+        //             Cmdnum::MoveUp(n) => queue!(stdout, cursor::MoveUp(n)).unwrap(),
+        //             Cmdnum::MoveDown(n) => queue!(stdout, cursor::MoveDown(n)).unwrap(),
+        //             Cmdnum::MoveTo(x, y) => queue!(stdout, cursor::MoveTo(x, y)).unwrap(),
+        //         },
+        //     }
+        // }
+    }
+
+    for r in repainted.iter() {
+        state.virtual_display[r.0][r.1].changed = false;
     }
 
     stdout.flush().unwrap();
@@ -298,6 +331,13 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Insert => queue!(stdout, cursor::Show).unwrap(),
         _ => {}
     }
+
+    queue!(
+        stdout,
+        cursor::MoveTo(0, 0),
+        crossterm::style::Print(state.repaint_counter)
+    )
+    .unwrap();
 
     let (x, y) = position().unwrap_or_default();
     let (max_x, googa) = size().unwrap_or_default();
@@ -334,15 +374,33 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
 async fn event_handler() {
     let mut reader = EventStream::new();
     // let mut brush_color = Color::White;
+    let termsize = terminal::size().unwrap_or_default();
+
     let mut state = State {
+        repaint_counter: 0,
         mode: Mode::Command,
         brush: '*',
         brush_color: Color::White,
         command: Command::None,
         drag_pos: (0, 0),
+        virtual_display: Vec::with_capacity(termsize.0.into()),
         history: vec![],
         redo_layers: vec![],
     };
+
+    for n in 0..termsize.0 {
+        let mut nested = Vec::with_capacity(termsize.1.into());
+        for i in 0..termsize.1 {
+            nested.push(Layer {
+                brush: ' ',
+                brush_color: Color::White,
+                changed: false,
+                x: n,
+                y: i,
+            })
+        }
+        state.virtual_display.push(nested);
+    }
 
     let colors: Vec<Color> = {
         use Color::*;
