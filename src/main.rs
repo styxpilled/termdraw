@@ -25,6 +25,14 @@ const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Use Esc to quit
 "#;
 
+const LUMA_VALUES: [char; 92] = [
+    ' ', '`', '.', '-', '\'', ':', '_', ',', '^', '=', ';', '>', '<', '+', '!', 'r', 'c', '*', '/',
+    'z', '?', 's', 'L', 'T', 'v', ')', 'J', '7', '(', '|', 'F', 'i', '{', 'C', '}', 'f', 'I', '3',
+    '1', 't', 'l', 'u', '[', 'n', 'e', 'o', 'Z', '5', 'Y', 'x', 'j', 'y', 'a', ']', '2', 'E', 'S',
+    'w', 'q', 'k', 'P', '6', 'h', '9', 'd', '4', 'V', 'p', 'O', 'G', 'b', 'U', 'A', 'K', 'X', 'H',
+    'm', '8', 'R', 'D', '#', '$', 'B', 'g', '0', 'M', 'N', 'W', 'Q', '%', '&', '@',
+];
+
 #[derive(Copy, Clone)]
 struct Layer {
     brush: char,
@@ -52,7 +60,7 @@ struct TextLayer {
 #[derive(Copy, Clone)]
 enum HistoryPage {
     Insert(TextLayer),
-    Draw(Layer),
+    Pencil(Layer),
     Cmd(Cmdnum),
 }
 
@@ -70,7 +78,8 @@ struct State {
 
 #[derive(PartialEq, Clone, Copy)]
 enum Mode {
-    Draw,
+    Brush,
+    Pencil,
     Insert,
     Command,
     Eyedropper,
@@ -81,7 +90,8 @@ enum Command {
     EnterEyedropperMode,
     EnterCommandMode,
     EnterInsertMode,
-    EnterDrawMode,
+    EnterPencilMode,
+    EnterBrushMode,
     Clear,
     Undo,
     Redo,
@@ -113,14 +123,16 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                             Command::EnterInsertMode
                         }
                         'd' => {
-                            queue!(stdout, cursor::Hide).unwrap();
-                            state.mode = Mode::Draw;
-                            Command::EnterDrawMode
+                            state.mode = Mode::Pencil;
+                            Command::EnterPencilMode
                         }
                         'e' => {
-                            queue!(stdout, cursor::Hide).unwrap();
                             state.mode = Mode::Eyedropper;
                             Command::EnterEyedropperMode
+                        }
+                        'b' => {
+                            state.mode = Mode::Brush;
+                            Command::EnterBrushMode
                         }
                         'q' => {
                             queue!(stdout, Clear(ClearType::All)).unwrap();
@@ -207,7 +219,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                 _ => {}
             };
         }
-        Mode::Draw => match event {
+        Mode::Pencil => match event {
             Event::Mouse(ev) => match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left)
                 | MouseEventKind::Down(MouseButton::Left) => {
@@ -217,7 +229,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                     //     crossterm::style::Print(state.brush)
                     // )
                     // .unwrap();
-                    state.history.push(HistoryPage::Draw(Layer {
+                    state.history.push(HistoryPage::Pencil(Layer {
                         brush: state.brush,
                         brush_color: state.brush_color,
                         changed: true,
@@ -276,6 +288,46 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             },
             _ => {}
         },
+        Mode::Brush => match event {
+            Event::Mouse(ev) => match ev.kind {
+                MouseEventKind::Drag(MouseButton::Left)
+                | MouseEventKind::Down(MouseButton::Left) => {
+                    let (x, y) = (ev.column, ev.row);
+                    let mut average_luma = 0;
+                    let (max_x, max_y) = terminal::size().unwrap_or_default();
+                    let mut divider = 0;
+                    for n in (x - 1)..(x + 2) {
+                        if n > 1 && n < max_x {
+                            for i in (y - 1)..(y + 2) {
+                                if i > 1 && i < max_y {
+                                    divider += 1;
+                                    average_luma += LUMA_VALUES
+                                        .iter()
+                                        .position(|&val| {
+                                            val == state.virtual_display[usize::from(n)]
+                                                [usize::from(i)]
+                                            .brush
+                                        })
+                                        .unwrap_or(50);
+                                }
+                            }
+                        }
+                    }
+                    average_luma = average_luma / divider;
+                    state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
+                        brush: LUMA_VALUES[average_luma],
+                        brush_color: state.brush_color,
+                        changed: true,
+                        x: ev.column,
+                        y: ev.row,
+                    };
+                    state.redo_layers = vec![];
+                    need_repaint = true;
+                }
+                _ => {}
+            },
+            _ => {}
+        },
         Mode::Eyedropper => match event {
             Event::Mouse(ev) => match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left)
@@ -314,7 +366,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         }
         // for page in state.history.clone() {
         //     match page {
-        //         HistoryPage::Draw(page) => {
+        //         HistoryPage::Pencil(page) => {
         //             queue!(
         //                 stdout,
         //                 cursor::MoveTo(page.x, page.y),
@@ -372,7 +424,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Eyedropper => "EYEDROPPER",
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
-        Mode::Draw => "DRAW",
+        Mode::Pencil => "PENCIL",
+        Mode::Brush => "BRUSH",
     };
     let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
     state.drag_pos.0, state.drag_pos.1),
