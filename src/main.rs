@@ -21,9 +21,11 @@ use crossterm::{
 
 use crate::command::command;
 use crate::data::*;
+use crate::insert::insert;
 
 mod command;
 mod data;
+mod insert;
 
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
@@ -61,50 +63,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
             command(event, stdout, state, &mut frame_state, &colors);
         }
         Mode::Insert => {
-            match event {
-                Event::Key(ev) => match ev.code {
-                    KeyCode::Char(code) => {
-                        state.history.push(HistoryPage::Insert(TextLayer {
-                            brush: code,
-                            color: state.brush_color,
-                        }));
-                        state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
-                        // queue!(stdout, crossterm::style::Print(code),).unwrap();
-                    }
-                    KeyCode::Left => {
-                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveLeft(1)));
-                        state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
-                    }
-                    KeyCode::Right => {
-                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveRight(1)));
-                        state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
-                    }
-                    KeyCode::Up => {
-                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveUp(1)));
-                        state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
-                    }
-                    KeyCode::Down => {
-                        state.history.push(HistoryPage::Cmd(Cmdnum::MoveDown(1)));
-                        state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
-                    }
-                    KeyCode::Backspace => {
-                        queue!(
-                            stdout,
-                            cursor::MoveLeft(1),
-                            crossterm::style::Print(" "),
-                            cursor::MoveLeft(1)
-                        )
-                        .unwrap();
-                    }
-                    _ => {}
-                },
-                _ => {}
-            };
+            insert(event, stdout, state, &mut frame_state);
         }
         Mode::Pencil => match event {
             Event::Mouse(ev) => match ev.kind {
@@ -342,6 +301,7 @@ async fn event_handler() {
         mode: Mode::Command,
         brush: '*',
         brush_color: Color::White,
+        pos: (0, 0),
         command: Command::None,
         drag_pos: (0, 0),
         virtual_display: Vec::with_capacity(termsize.0.into()),

@@ -5,6 +5,7 @@ pub struct State {
     pub mode: Mode,
     pub brush: char,
     pub brush_color: Color,
+    pub pos: (u16, u16),
     pub command: Command,
     pub drag_pos: (u16, u16),
     pub history: Vec<HistoryPage>,
