@@ -34,8 +34,8 @@ pub fn command(
                         Command::EnterEyedropperMode
                     }
                     'b' => {
-                        state.mode = Mode::Brush;
-                        Command::EnterBrushMode
+                        state.mode = Mode::ContentBrush;
+                        Command::EnterContentBrushMode
                     }
                     'q' => {
                         queue!(stdout, Clear(ClearType::All)).unwrap();

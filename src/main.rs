@@ -20,12 +20,16 @@ use crossterm::{
 };
 
 use crate::command::command;
+use crate::content_brush::content_brush;
 use crate::data::*;
 use crate::insert::insert;
+use crate::pencil::pencil;
 
 mod command;
+mod content_brush;
 mod data;
 mod insert;
+mod pencil;
 
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
@@ -65,114 +69,12 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Insert => {
             insert(event, stdout, state, &mut frame_state);
         }
-        Mode::Pencil => match event {
-            Event::Mouse(ev) => match ev.kind {
-                MouseEventKind::Drag(MouseButton::Left)
-                | MouseEventKind::Down(MouseButton::Left) => {
-                    // queue!(
-                    //     stdout,
-                    //     cursor::MoveTo(ev.column, ev.row),
-                    //     crossterm::style::Print(state.brush)
-                    // )
-                    // .unwrap();
-                    state.history.push(HistoryPage::Pencil(Layer {
-                        brush: state.brush,
-                        brush_color: state.brush_color,
-                        changed: true,
-                        x: ev.column,
-                        y: ev.row,
-                    }));
-                    state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
-                        brush: state.brush,
-                        brush_color: state.brush_color,
-                        changed: true,
-                        x: ev.column,
-                        y: ev.row,
-                    };
-                    state.redo_layers = vec![];
-                    frame_state.need_repaint = true;
-                }
-                // MouseEventKind::Up()
-                MouseEventKind::Down(MouseButton::Right) => {
-                    state.drag_pos = position().unwrap_or_default();
-                }
-                MouseEventKind::Drag(MouseButton::Right) => {
-                    queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
-                    for _ in state.drag_pos.0..ev.column {
-                        queue!(stdout, crossterm::style::Print(state.brush),).unwrap();
-                    }
-                    for _ in state.drag_pos.1..ev.row {
-                        queue!(
-                            stdout,
-                            crossterm::style::Print(state.brush),
-                            cursor::MoveLeft(1),
-                            cursor::MoveDown(1)
-                        )
-                        .unwrap();
-                    }
-                    queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
-                    for _ in state.drag_pos.1..ev.row {
-                        queue!(
-                            stdout,
-                            crossterm::style::Print(state.brush),
-                            cursor::MoveLeft(1),
-                            cursor::MoveDown(1)
-                        )
-                        .unwrap();
-                    }
-                    for _ in state.drag_pos.0..ev.column {
-                        queue!(stdout, crossterm::style::Print(state.brush),).unwrap();
-                    }
-                }
-                _ => {}
-            },
-            Event::Key(ev) => match ev.code {
-                KeyCode::Char(code) => {
-                    state.brush = code;
-                }
-                _ => {}
-            },
-            _ => {}
-        },
-        Mode::Brush => match event {
-            Event::Mouse(ev) => match ev.kind {
-                MouseEventKind::Drag(MouseButton::Left)
-                | MouseEventKind::Down(MouseButton::Left) => {
-                    let (x, y) = (ev.column, ev.row);
-                    let mut average_luma = 0;
-                    let (mx, my) = terminal::size().unwrap_or_default();
-                    let mut divider = 0;
-                    let col_range =
-                        if x > 1 { x - 1 } else { x }..if x + 1 < mx { x + 1 } else { x } + 1;
-                    let row_range =
-                        if y > 1 { y - 1 } else { y }..if y + 1 < my { y + 1 } else { y } + 1;
-                    for n in col_range {
-                        for i in row_range.clone() {
-                            divider += 1;
-                            average_luma += LUMA_VALUES
-                                .iter()
-                                .position(|&val| {
-                                    val == state.virtual_display[usize::from(n)][usize::from(i)]
-                                        .brush
-                                })
-                                .unwrap_or(50);
-                        }
-                    }
-                    average_luma = average_luma / divider;
-                    state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
-                        brush: LUMA_VALUES[average_luma],
-                        brush_color: state.brush_color,
-                        changed: true,
-                        x: ev.column,
-                        y: ev.row,
-                    };
-                    state.redo_layers = vec![];
-                    frame_state.need_repaint = true;
-                }
-                _ => {}
-            },
-            _ => {}
-        },
+        Mode::Pencil => {
+            pencil(event, stdout, state, &mut frame_state);
+        }
+        Mode::ContentBrush => {
+            content_brush(event, stdout, state, &mut frame_state);
+        }
         Mode::Eyedropper => match event {
             Event::Mouse(ev) => match ev.kind {
                 MouseEventKind::Drag(MouseButton::Left)
@@ -270,7 +172,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",
         Mode::Pencil => "PENCIL",
-        Mode::Brush => "BRUSH",
+        Mode::ContentBrush => "CONTENT BRUSH",
     };
     let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
     state.drag_pos.0, state.drag_pos.1),

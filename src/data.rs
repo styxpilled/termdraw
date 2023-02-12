@@ -50,20 +50,20 @@ pub enum HistoryPage {
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
-    Brush,
     Pencil,
     Insert,
     Command,
     Eyedropper,
+    ContentBrush,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Command {
+    EnterContentBrushMode,
     EnterEyedropperMode,
     EnterCommandMode,
     EnterInsertMode,
     EnterPencilMode,
-    EnterBrushMode,
     Clear,
     Undo,
     Redo,
