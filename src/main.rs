@@ -22,12 +22,14 @@ use crossterm::{
 use crate::command::command;
 use crate::content_brush::content_brush;
 use crate::data::*;
+use crate::eyedropper::eyedropper;
 use crate::insert::insert;
 use crate::pencil::pencil;
 
 mod command;
 mod content_brush;
 mod data;
+mod eyedropper;
 mod insert;
 mod pencil;
 
@@ -75,20 +77,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::ContentBrush => {
             content_brush(event, stdout, state, &mut frame_state);
         }
-        Mode::Eyedropper => match event {
-            Event::Mouse(ev) => match ev.kind {
-                MouseEventKind::Drag(MouseButton::Left)
-                | MouseEventKind::Down(MouseButton::Left) => {
-                    state.brush =
-                        state.virtual_display[usize::from(ev.column)][usize::from(ev.row)].brush;
-                    state.brush_color = state.virtual_display[usize::from(ev.column)]
-                        [usize::from(ev.row)]
-                    .brush_color;
-                }
-                _ => {}
-            },
-            _ => {}
-        },
+        Mode::Eyedropper => {
+            eyedropper(event, stdout, state, &mut frame_state);
+        }
     }
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
