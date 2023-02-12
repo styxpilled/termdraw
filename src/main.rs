@@ -18,6 +18,13 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
+
+use crate::command::command;
+use crate::data::*;
+
+mod command;
+mod data;
+
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
  - Prints "." every second if there's no event
@@ -33,71 +40,6 @@ const LUMA_VALUES: [char; 92] = [
     'm', '8', 'R', 'D', '#', '$', 'B', 'g', '0', 'M', 'N', 'W', 'Q', '%', '&', '@',
 ];
 
-#[derive(Copy, Clone)]
-struct Layer {
-    brush: char,
-    brush_color: Color,
-    x: u16,
-    y: u16,
-    changed: bool,
-}
-
-#[derive(Copy, Clone)]
-enum Cmdnum {
-    MoveLeft(u16),
-    MoveRight(u16),
-    MoveUp(u16),
-    MoveDown(u16),
-    MoveTo(u16, u16),
-}
-
-#[derive(Copy, Clone)]
-struct TextLayer {
-    brush: char,
-    color: Color,
-}
-
-#[derive(Copy, Clone)]
-enum HistoryPage {
-    Insert(TextLayer),
-    Pencil(Layer),
-    Cmd(Cmdnum),
-}
-
-struct State {
-    repaint_counter: u32,
-    mode: Mode,
-    brush: char,
-    brush_color: Color,
-    command: Command,
-    drag_pos: (u16, u16),
-    history: Vec<HistoryPage>,
-    virtual_display: Vec<Vec<Layer>>,
-    redo_layers: Vec<HistoryPage>,
-}
-
-#[derive(PartialEq, Clone, Copy)]
-enum Mode {
-    Brush,
-    Pencil,
-    Insert,
-    Command,
-    Eyedropper,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum Command {
-    EnterEyedropperMode,
-    EnterCommandMode,
-    EnterInsertMode,
-    EnterPencilMode,
-    EnterBrushMode,
-    Clear,
-    Undo,
-    Redo,
-    None,
-}
-
 fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color>) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
         if state.mode == Mode::Command {
@@ -108,71 +50,16 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         state.command = Command::EnterCommandMode;
     }
 
-    let mut need_repaint = false;
+    let mut frame_state = FrameState {
+        need_repaint: false,
+    };
 
     queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
 
     match state.mode {
-        Mode::Command => match event {
-            Event::Key(ev) => match ev.code {
-                KeyCode::Char(code) => {
-                    state.command = match code {
-                        'i' => {
-                            queue!(stdout, cursor::Show).unwrap();
-                            state.mode = Mode::Insert;
-                            Command::EnterInsertMode
-                        }
-                        'd' => {
-                            state.mode = Mode::Pencil;
-                            Command::EnterPencilMode
-                        }
-                        'e' => {
-                            state.mode = Mode::Eyedropper;
-                            Command::EnterEyedropperMode
-                        }
-                        'b' => {
-                            state.mode = Mode::Brush;
-                            Command::EnterBrushMode
-                        }
-                        'q' => {
-                            queue!(stdout, Clear(ClearType::All)).unwrap();
-                            state.history = vec![];
-                            need_repaint = true;
-                            Command::Clear
-                        }
-                        'f' => {
-                            let n = colors
-                                .iter()
-                                .position(|n| n == &state.brush_color)
-                                .unwrap_or_default();
-                            let index = if n + 1 < colors.len() { n + 1 } else { 0 };
-                            state.brush_color = colors[index];
-                            Command::Undo
-                        }
-                        'u' => {
-                            queue!(stdout, Clear(ClearType::All)).unwrap();
-                            let undo = state.history.pop();
-                            if undo.is_some() {
-                                state.redo_layers.push(undo.unwrap());
-                            }
-                            need_repaint = true;
-                            Command::Undo
-                        }
-                        'y' => {
-                            let redo = state.redo_layers.pop();
-                            if redo.is_some() {
-                                state.history.push(redo.unwrap());
-                            }
-                            need_repaint = true;
-                            Command::Redo
-                        }
-                        _ => state.command,
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
-        },
+        Mode::Command => {
+            command(event, stdout, state, &mut frame_state, &colors);
+        }
         Mode::Insert => {
             match event {
                 Event::Key(ev) => match ev.code {
@@ -182,28 +69,28 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                             color: state.brush_color,
                         }));
                         state.redo_layers = vec![];
-                        need_repaint = true;
+                        frame_state.need_repaint = true;
                         // queue!(stdout, crossterm::style::Print(code),).unwrap();
                     }
                     KeyCode::Left => {
                         state.history.push(HistoryPage::Cmd(Cmdnum::MoveLeft(1)));
                         state.redo_layers = vec![];
-                        need_repaint = true;
+                        frame_state.need_repaint = true;
                     }
                     KeyCode::Right => {
                         state.history.push(HistoryPage::Cmd(Cmdnum::MoveRight(1)));
                         state.redo_layers = vec![];
-                        need_repaint = true;
+                        frame_state.need_repaint = true;
                     }
                     KeyCode::Up => {
                         state.history.push(HistoryPage::Cmd(Cmdnum::MoveUp(1)));
                         state.redo_layers = vec![];
-                        need_repaint = true;
+                        frame_state.need_repaint = true;
                     }
                     KeyCode::Down => {
                         state.history.push(HistoryPage::Cmd(Cmdnum::MoveDown(1)));
                         state.redo_layers = vec![];
-                        need_repaint = true;
+                        frame_state.need_repaint = true;
                     }
                     KeyCode::Backspace => {
                         queue!(
@@ -244,7 +131,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         y: ev.row,
                     };
                     state.redo_layers = vec![];
-                    need_repaint = true;
+                    frame_state.need_repaint = true;
                 }
                 // MouseEventKind::Up()
                 MouseEventKind::Down(MouseButton::Right) => {
@@ -321,7 +208,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
                         y: ev.row,
                     };
                     state.redo_layers = vec![];
-                    need_repaint = true;
+                    frame_state.need_repaint = true;
                 }
                 _ => {}
             },
@@ -346,7 +233,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     //     print!("{:?}", ev);
     // }
     let mut repainted = vec![];
-    if need_repaint {
+    if frame_state.need_repaint {
         state.repaint_counter += 1;
         for (col_index, column) in state.virtual_display.iter().enumerate() {
             for (i, element) in column.iter().enumerate() {
