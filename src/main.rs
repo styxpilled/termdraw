@@ -74,6 +74,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         Mode::Eyedropper => {
             modes::eyedropper(event, stdout, state, &mut frame_state);
         }
+        Mode::Brush => {
+            modes::brush(event, stdout, state, &mut frame_state);
+        }
     }
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
@@ -153,6 +156,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     )
     .unwrap();
     let mode_text = match state.mode {
+        Mode::Brush => "BRUSH",
         Mode::Eyedropper => "EYEDROPPER",
         Mode::Command => "COMMAND",
         Mode::Insert => "INSERT",

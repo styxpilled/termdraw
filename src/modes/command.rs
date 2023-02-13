@@ -35,6 +35,10 @@ pub fn command(
                         Command::EnterEyedropperMode
                     }
                     'b' => {
+                        state.mode = Mode::Brush;
+                        Command::EnterBrushMode
+                    }
+                    'c' => {
                         state.mode = Mode::ContentBrush;
                         Command::EnterContentBrushMode
                     }
