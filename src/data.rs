@@ -1,3 +1,4 @@
+use crate::modes::Mode;
 use crossterm::style::Color;
 
 pub struct State {
@@ -46,15 +47,6 @@ pub enum HistoryPage {
     Insert(TextLayer),
     Pencil(Layer),
     Cmd(Cmdnum),
-}
-
-#[derive(PartialEq, Clone, Copy)]
-pub enum Mode {
-    Pencil,
-    Insert,
-    Command,
-    Eyedropper,
-    ContentBrush,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]

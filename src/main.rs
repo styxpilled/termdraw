@@ -9,29 +9,24 @@ use futures_timer::Delay;
 use crossterm::{
     cursor,
     cursor::position,
-    event::{
-        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, MouseButton,
-        MouseEventKind,
-    },
+    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
     execute, queue,
     style::{Color, SetForegroundColor},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
 
-use crate::command::command;
-use crate::content_brush::content_brush;
+// use crate::command::command;
+// use crate::content_brush::content_brush;
 use crate::data::*;
-use crate::eyedropper::eyedropper;
-use crate::insert::insert;
-use crate::pencil::pencil;
+use crate::modes::Mode;
+// use crate::modes;
+// use crate::eyedropper::eyedropper;
+// use crate::insert::insert;
+// use crate::pencil::pencil;
 
-mod command;
-mod content_brush;
 mod data;
-mod eyedropper;
-mod insert;
-mod pencil;
+mod modes;
 
 const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
@@ -63,22 +58,21 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     };
 
     queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
-
     match state.mode {
         Mode::Command => {
-            command(event, stdout, state, &mut frame_state, &colors);
+            modes::command(event, stdout, state, &mut frame_state, &colors);
         }
         Mode::Insert => {
-            insert(event, stdout, state, &mut frame_state);
+            modes::insert(event, stdout, state, &mut frame_state);
         }
         Mode::Pencil => {
-            pencil(event, stdout, state, &mut frame_state);
+            modes::pencil(event, stdout, state, &mut frame_state);
         }
         Mode::ContentBrush => {
-            content_brush(event, stdout, state, &mut frame_state);
+            modes::content_brush(event, stdout, state, &mut frame_state);
         }
         Mode::Eyedropper => {
-            eyedropper(event, stdout, state, &mut frame_state);
+            modes::eyedropper(event, stdout, state, &mut frame_state);
         }
     }
     // if ev.modifiers == KeyModifiers::SHIFT {

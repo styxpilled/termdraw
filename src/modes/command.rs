@@ -1,6 +1,7 @@
 use std::io::Stdout;
 
 use crate::data::*;
+use crate::modes::Mode;
 use crossterm::{
     cursor,
     event::{Event, KeyCode},
