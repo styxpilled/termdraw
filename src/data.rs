@@ -6,6 +6,7 @@ pub struct State {
     pub mode: Mode,
     pub brush: char,
     pub brush_color: Color,
+    pub brush_mode: BrushMode,
     pub pos: (u16, u16),
     pub command: Command,
     pub drag_pos: (u16, u16),
@@ -47,6 +48,12 @@ pub enum HistoryPage {
     Insert(TextLayer),
     Pencil(Layer),
     Cmd(Cmdnum),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum BrushMode {
+    Add,
+    Subtract,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]

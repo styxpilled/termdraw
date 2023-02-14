@@ -2,14 +2,24 @@ use std::io::Stdout;
 
 use crate::{data::*, LUMA_VALUES};
 use crossterm::{
-    event::{Event, MouseButton, MouseEventKind},
+    event::{Event, KeyCode, MouseButton, MouseEventKind},
     terminal,
 };
 
-use std::cmp::min;
+use std::cmp::{max, min};
 
 pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State, frame_state: &mut FrameState) {
     match event {
+        Event::Key(ev) => match ev.code {
+            KeyCode::Char(code) => {
+                state.brush_mode = match code {
+                    'a' => BrushMode::Add,
+                    'b' => BrushMode::Subtract,
+                    _ => state.brush_mode,
+                }
+            }
+            _ => {}
+        },
         Event::Mouse(ev) => match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {
                 let (x, y) = (ev.column, ev.row);
@@ -44,8 +54,21 @@ pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State, frame_state:
                                 val == state.virtual_display[usize::from(n)][usize::from(i)].brush
                             })
                             .unwrap_or(0);
+                        let luma_value = match state.brush_mode {
+                            BrushMode::Add => {
+                                LUMA_VALUES[min(old_luma + new_luma, LUMA_VALUES.len() - 1)]
+                            }
+
+                            BrushMode::Subtract => {
+                                LUMA_VALUES[if old_luma < new_luma {
+                                    0
+                                } else {
+                                    old_luma - new_luma
+                                }]
+                            }
+                        };
                         state.virtual_display[usize::from(n)][usize::from(i)] = Layer {
-                            brush: LUMA_VALUES[min(old_luma + new_luma, LUMA_VALUES.len() - 1)],
+                            brush: luma_value,
                             brush_color: state.brush_color,
                             changed: true,
                             x: n,

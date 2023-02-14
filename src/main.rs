@@ -192,6 +192,7 @@ async fn event_handler() {
         mode: Mode::Command,
         brush: '*',
         brush_color: Color::White,
+        brush_mode: BrushMode::Subtract,
         pos: (0, 0),
         command: Command::None,
         drag_pos: (0, 0),
