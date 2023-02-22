@@ -64,6 +64,7 @@ pub enum Command {
     EnterInsertMode,
     EnterPencilMode,
     EnterBrushMode,
+    Save,
     Clear,
     Undo,
     Redo,

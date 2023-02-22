@@ -1,4 +1,7 @@
-use std::io::Stdout;
+use std::{
+    fs::File,
+    io::{Stdout, Write},
+};
 
 use crate::data::*;
 use crate::modes::Mode;
@@ -7,7 +10,7 @@ use crossterm::{
     event::{Event, KeyCode},
     queue,
     style::Color,
-    terminal::{Clear, ClearType},
+    terminal::{self, Clear, ClearType},
 };
 
 pub fn command(
@@ -41,6 +44,31 @@ pub fn command(
                     'c' => {
                         state.mode = Mode::ContentBrush;
                         Command::EnterContentBrushMode
+                    }
+                    's' => {
+                        let mut file = File::create("./termdraw-result")
+                            .expect("Couldn't create the file for saving!");
+                        let mut accumulator = String::from("");
+                        let (cols, rows) = terminal::size().unwrap_or_default();
+                        let mut vec_accumulator: Vec<Vec<char>> =
+                            vec![vec![' '; cols.into()]; rows.into()];
+                        // vec_accumulator = vec![]
+                        // for _ in 0..rows {}
+                        for column in state.virtual_display.clone() {
+                            for layer in column {
+                                vec_accumulator[usize::from(layer.y)][usize::from(layer.x)] =
+                                    layer.brush;
+                            }
+                        }
+                        for row in vec_accumulator {
+                            for ch in row {
+                                accumulator.push(ch);
+                            }
+                            accumulator.push('\n');
+                        }
+                        file.write_all(accumulator.as_bytes())
+                            .expect("Couldn't write to file");
+                        Command::Save
                     }
                     'q' => {
                         queue!(stdout, Clear(ClearType::All)).unwrap();
