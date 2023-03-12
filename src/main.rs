@@ -11,7 +11,7 @@ use crossterm::{
     cursor::position,
     event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
     execute, queue,
-    style::{Color, SetForegroundColor},
+    style::{Attribute, Color, SetAttribute, SetBackgroundColor, SetForegroundColor},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
@@ -148,34 +148,59 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     .unwrap();
 
     let (x, y) = position().unwrap_or_default();
-    let (max_x, googa) = size().unwrap_or_default();
+    let (max_x, max_y) = size().unwrap_or_default();
     queue!(
         stdout,
-        cursor::MoveTo(0, googa),
+        cursor::MoveTo(0, max_y),
         SetForegroundColor(Color::Red)
     )
     .unwrap();
-    let mode_text = match state.mode {
-        Mode::Brush => "BRUSH",
-        Mode::Eyedropper => "EYEDROPPER",
-        Mode::Command => "COMMAND",
-        Mode::Insert => "INSERT",
-        Mode::Pencil => "PENCIL",
-        Mode::ContentBrush => "CONTENT BRUSH",
+    let (mode_text, bar_color) = match state.mode {
+        Mode::Brush => ("BRUSH", Color::DarkGreen),
+        Mode::Eyedropper => ("EYEDROPPER", Color::DarkMagenta),
+        Mode::Command => ("COMMAND", Color::DarkRed),
+        Mode::Insert => ("INSERT", Color::DarkCyan),
+        Mode::Pencil => ("PENCIL", Color::DarkYellow),
+        Mode::ContentBrush => ("CONTENT BRUSH", Color::Green),
     };
-    let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
-    state.drag_pos.0, state.drag_pos.1),
-    format!(", last command: {:?}", state.command));
-    let pad = " ".repeat(max_x as usize - (info_display.0.len() + info_display.1.len()));
-    print!("{}", info_display.0);
-    queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
-    print!("{}", state.brush);
-    queue!(stdout, SetForegroundColor(Color::Red)).unwrap();
-    print!("{pad}");
+    let mode_text = format!(" {mode_text} ");
+    let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
+    let mid_pad = " ".repeat((max_x as usize - (mode_text.len() + pos_text.len() + 5)) / 2);
+    queue!(
+        stdout,
+        SetAttribute(Attribute::Bold),
+        SetBackgroundColor(bar_color),
+        SetForegroundColor(Color::Black),
+        crossterm::style::Print(mode_text),
+        SetBackgroundColor(Color::DarkGrey),
+        crossterm::style::Print(mid_pad.clone()),
+        SetBackgroundColor(bar_color),
+        crossterm::style::Print(" ["),
+        SetForegroundColor(state.brush_color),
+        crossterm::style::Print(state.brush),
+        SetForegroundColor(Color::Black),
+        crossterm::style::Print("] "),
+        SetBackgroundColor(Color::DarkGrey),
+        crossterm::style::Print(mid_pad),
+        SetBackgroundColor(bar_color),
+        crossterm::style::Print(pos_text),
+    )
+    .unwrap();
+    // let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
+    // state.drag_pos.0, state.drag_pos.1),
+    // format!(", last command: {:?}", state.command));
+    // let pad = " ".repeat(max_x as usize - (info_display.0.len() + info_display.1.len()));
+    // print!("{}", info_display.0);
+    // queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
+    // print!("{}", state.brush);
+    // queue!(stdout, SetForegroundColor(Color::Red)).unwrap();
+    // print!("{pad}");
     queue!(
         stdout,
         cursor::MoveTo(x, y),
-        SetForegroundColor(Color::White)
+        SetForegroundColor(Color::White),
+        SetBackgroundColor(Color::Reset),
+        SetAttribute(Attribute::Reset)
     )
     .unwrap();
     stdout.flush().unwrap();
