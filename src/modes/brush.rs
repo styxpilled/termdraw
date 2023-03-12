@@ -90,7 +90,7 @@ pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State, frame_state:
                             x: col,
                             y: row,
                         };
-                        state.redo_layers = vec![];
+                        // state.redo_layers = vec![];
                         frame_state.need_repaint = true;
                     },
                 );

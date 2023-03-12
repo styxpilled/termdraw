@@ -46,6 +46,7 @@ pub fn command(
                         Command::EnterContentBrushMode
                     }
                     's' => {
+                        // TODO: make this work with colors
                         let mut file = File::create("./termdraw-result")
                             .expect("Couldn't create the file for saving!");
                         let mut accumulator = String::from("");
@@ -72,11 +73,12 @@ pub fn command(
                     }
                     'q' => {
                         queue!(stdout, Clear(ClearType::All)).unwrap();
-                        state.history = vec![];
+                        // state.history = vec![];
                         frame_state.need_repaint = true;
                         Command::Clear
                     }
                     'f' => {
+                        // TODO: support rgb color
                         let n = colors
                             .iter()
                             .position(|n| n == &state.brush_color)
@@ -87,18 +89,18 @@ pub fn command(
                     }
                     'u' => {
                         queue!(stdout, Clear(ClearType::All)).unwrap();
-                        let undo = state.history.pop();
-                        if undo.is_some() {
-                            state.redo_layers.push(undo.unwrap());
-                        }
-                        frame_state.need_repaint = true;
+                        // let undo = state.history.pop();
+                        // if undo.is_some() {
+                        // state.redo_layers.push(undo.unwrap());
+                        // }
+                        // frame_state.need_repaint = true;
                         Command::Undo
                     }
                     'y' => {
-                        let redo = state.redo_layers.pop();
-                        if redo.is_some() {
-                            state.history.push(redo.unwrap());
-                        }
+                        // let redo = state.redo_layers.pop();
+                        // if redo.is_some() {
+                        //     state.history.push(redo.unwrap());
+                        // }
                         frame_state.need_repaint = true;
                         Command::Redo
                     }

@@ -10,9 +10,9 @@ pub struct State {
     pub pos: (u16, u16),
     pub command: Command,
     pub drag_pos: (u16, u16),
-    pub history: Vec<HistoryPage>,
+    // pub history: Vec<HistoryPage>,
     pub virtual_display: Vec<Vec<Layer>>,
-    pub redo_layers: Vec<HistoryPage>,
+    // pub redo_layers: Vec<HistoryPage>,
 }
 
 pub struct FrameState {
@@ -32,22 +32,6 @@ pub struct Layer {
 pub struct TextLayer {
     pub brush: char,
     pub color: Color,
-}
-
-#[derive(Copy, Clone)]
-pub enum Cmdnum {
-    MoveLeft(u16),
-    MoveRight(u16),
-    MoveUp(u16),
-    MoveDown(u16),
-    MoveTo(u16, u16),
-}
-
-#[derive(Copy, Clone)]
-pub enum HistoryPage {
-    Insert(TextLayer),
-    Pencil(Layer),
-    Cmd(Cmdnum),
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -42,7 +42,7 @@ pub fn content_brush(
                     x: ev.column,
                     y: ev.row,
                 };
-                state.redo_layers = vec![];
+                // state.redo_layers = vec![];
                 frame_state.need_repaint = true;
             }
             _ => {}

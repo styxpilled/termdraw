@@ -222,8 +222,8 @@ async fn event_handler() {
         command: Command::None,
         drag_pos: (0, 0),
         virtual_display: Vec::with_capacity(termsize.0.into()),
-        history: vec![],
-        redo_layers: vec![],
+        // history: vec![],
+        // redo_layers: vec![],
     };
 
     for n in 0..termsize.0 {

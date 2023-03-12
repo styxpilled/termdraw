@@ -17,13 +17,13 @@ pub fn pencil(event: Event, stdout: &mut Stdout, state: &mut State, frame_state:
                 //     crossterm::style::Print(state.brush)
                 // )
                 // .unwrap();
-                state.history.push(HistoryPage::Pencil(Layer {
-                    brush: state.brush,
-                    brush_color: state.brush_color,
-                    changed: true,
-                    x: ev.column,
-                    y: ev.row,
-                }));
+                // state.history.push(HistoryPage::Pencil(Layer {
+                //     brush: state.brush,
+                //     brush_color: state.brush_color,
+                //     changed: true,
+                //     x: ev.column,
+                //     y: ev.row,
+                // }));
                 state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
                     brush: state.brush,
                     brush_color: state.brush_color,
@@ -31,7 +31,7 @@ pub fn pencil(event: Event, stdout: &mut Stdout, state: &mut State, frame_state:
                     x: ev.column,
                     y: ev.row,
                 };
-                state.redo_layers = vec![];
+                // state.redo_layers = vec![];
                 frame_state.need_repaint = true;
             }
             // MouseEventKind::Up()
