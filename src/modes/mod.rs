@@ -17,6 +17,19 @@ pub enum Mode {
     ContentBrush,
 }
 
+impl Mode {
+    pub fn get_color(&self) -> Color {
+        match self {
+            Mode::Brush => Color::DarkGreen,
+            Mode::Eyedropper => Color::DarkMagenta,
+            Mode::Command => Color::DarkRed,
+            Mode::Insert => Color::DarkCyan,
+            Mode::Pencil => Color::DarkYellow,
+            Mode::ContentBrush => Color::Green,
+        }
+    }
+}
+
 impl Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -39,6 +52,7 @@ use std::fmt::Display;
 pub use brush::brush;
 pub use command::command;
 pub use content_brush::content_brush;
+use crossterm::style::Color;
 pub use eyedropper::eyedropper;
 pub use insert::insert;
 pub use pencil::pencil;

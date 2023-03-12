@@ -140,32 +140,14 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         _ => {}
     }
 
-    queue!(
-        stdout,
-        cursor::MoveTo(0, 0),
-        crossterm::style::Print(state.repaint_counter)
-    )
-    .unwrap();
-
     let (x, y) = position().unwrap_or_default();
     let (max_x, max_y) = size().unwrap_or_default();
-    queue!(
-        stdout,
-        cursor::MoveTo(0, max_y),
-        SetForegroundColor(Color::Red)
-    )
-    .unwrap();
-    let bar_color = match state.mode {
-        Mode::Brush => Color::DarkGreen,
-        Mode::Eyedropper => Color::DarkMagenta,
-        Mode::Command => Color::DarkRed,
-        Mode::Insert => Color::DarkCyan,
-        Mode::Pencil => Color::DarkYellow,
-        Mode::ContentBrush => Color::Green,
-    };
+    queue!(stdout, cursor::MoveTo(0, max_y)).unwrap();
+    let bar_color = state.mode.get_color();
     let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
-    let mid_pad = " ".repeat((max_x as usize - (mode_text.len() + pos_text.len() + 5)) / 2);
+    let left_pad = " ".repeat((max_x as usize / 2) - (mode_text.len() + 5));
+    let right_pad = " ".repeat((max_x as usize / 2) - pos_text.len() + 1);
     queue!(
         stdout,
         SetAttribute(Attribute::Bold),
@@ -173,7 +155,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         SetForegroundColor(Color::Black),
         crossterm::style::Print(mode_text),
         SetBackgroundColor(Color::DarkGrey),
-        crossterm::style::Print(mid_pad.clone()),
+        crossterm::style::Print(left_pad),
         SetBackgroundColor(bar_color),
         crossterm::style::Print(" ["),
         SetForegroundColor(state.brush_color),
@@ -181,7 +163,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         SetForegroundColor(Color::Black),
         crossterm::style::Print("] "),
         SetBackgroundColor(Color::DarkGrey),
-        crossterm::style::Print(mid_pad),
+        crossterm::style::Print(right_pad),
         SetBackgroundColor(bar_color),
         crossterm::style::Print(pos_text),
     )
