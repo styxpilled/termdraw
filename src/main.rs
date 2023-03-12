@@ -155,15 +155,15 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         SetForegroundColor(Color::Red)
     )
     .unwrap();
-    let (mode_text, bar_color) = match state.mode {
-        Mode::Brush => ("BRUSH", Color::DarkGreen),
-        Mode::Eyedropper => ("EYEDROPPER", Color::DarkMagenta),
-        Mode::Command => ("COMMAND", Color::DarkRed),
-        Mode::Insert => ("INSERT", Color::DarkCyan),
-        Mode::Pencil => ("PENCIL", Color::DarkYellow),
-        Mode::ContentBrush => ("CONTENT BRUSH", Color::Green),
+    let bar_color = match state.mode {
+        Mode::Brush => Color::DarkGreen,
+        Mode::Eyedropper => Color::DarkMagenta,
+        Mode::Command => Color::DarkRed,
+        Mode::Insert => Color::DarkCyan,
+        Mode::Pencil => Color::DarkYellow,
+        Mode::ContentBrush => Color::Green,
     };
-    let mode_text = format!(" {mode_text} ");
+    let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
     let mid_pad = " ".repeat((max_x as usize - (mode_text.len() + pos_text.len() + 5)) / 2);
     queue!(
