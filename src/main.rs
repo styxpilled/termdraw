@@ -147,7 +147,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
     let left_pad = " ".repeat((max_x as usize / 2) - (mode_text.len() + 5));
-    let right_pad = " ".repeat((max_x as usize / 2) - pos_text.len() + 1);
+    let right_pad = " ".repeat((max_x as usize / 2) - pos_text.len());
     queue!(
         stdout,
         SetAttribute(Attribute::Bold),
