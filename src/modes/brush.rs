@@ -1,6 +1,6 @@
 use std::io::Stdout;
 
-use crate::{data::*, LUMA_VALUES};
+use crate::{data::*, handlers::handle_keychar, LUMA_VALUES};
 use crossterm::{
     event::{Event, KeyCode, MouseButton, MouseEvent, MouseEventKind},
     terminal,
@@ -8,73 +8,72 @@ use crossterm::{
 
 use std::cmp::min;
 
-pub fn base_brush(
-    ev: MouseEvent,
-    state: &mut State,
-    frame_state: &mut FrameState,
-    f: fn(state: &mut State, frame_state: &mut FrameState, new_luma: usize, col: u16, row: u16),
-) {
-    let (x, y) = (ev.column, ev.row);
+use super::BrushMode;
+
+pub fn base_brush<F>(ev: MouseEvent, state: &mut State, radius: i32, mut f: F)
+where
+    F: FnMut(&mut State, usize, u16, u16),
+{
+    let (col, row) = (ev.column, ev.row);
     let (mx, my) = terminal::size().unwrap_or_default();
-    let col_range = if x > 2 {
-        x - 2
-    } else if x > 1 {
-        x - 1
-    } else {
-        x
-    }..if x + 2 < mx {
-        x + 2
-    } else if x + 1 < mx {
-        x + 1
-    } else {
-        x
-    } + 1;
-    let row_range = if y > 1 { y - 1 } else { y }..if y + 1 < my { y + 1 } else { y } + 1;
-    for n in col_range {
-        for i in row_range.clone() {
-            let new_luma = if (n + 2 - x == 0 || n + 2 - x == 4) && i != y {
-                0
-            } else if (i != y && n != x) || (n + 2 - x) % 4 == 0 {
-                4
-            } else {
-                8
-            };
-            f(state, frame_state, new_luma, n, i);
+    let (mx, my) = (mx.try_into().unwrap(), my.try_into().unwrap());
+
+    // let row_range = if y > 1 { y - 1 } else { y }..if y + 1 < my { y + 1 } else { y } + 1;
+    let col: i32 = col.try_into().unwrap();
+    let row: i32 = row.try_into().unwrap();
+    for x in -radius..=radius {
+        for y in -radius..=radius {
+            let grr = ((x * x) * 100 / radius / 2) + ((y * y) * 100 / radius);
+            if grr <= 100 {
+                let xc: i32 = x + col;
+                let yr: i32 = y + row;
+                if xc > 0 && xc < mx && yr > 0 && yr < my {
+                    f(
+                        state,
+                        (100 - grr) as usize,
+                        xc.try_into().unwrap(),
+                        yr.try_into().unwrap(),
+                    );
+                }
+            }
         }
     }
 }
 
-pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State, frame_state: &mut FrameState) {
-    match event {
-        Event::Key(ev) => match ev.code {
-            KeyCode::Char(code) => {
-                state.brush_mode = match code {
-                    'a' | '+' => BrushMode::Add,
-                    'd' | '-' => BrushMode::Subtract,
-                    _ => state.brush_mode,
-                }
-            }
+pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State) {
+    let (mode, size) = {
+        let m_test = match &mut state.mode {
+            super::Mode::Brush(t) => t,
+            _ => unreachable!(),
+        };
+        handle_keychar(&event, |c| match c {
+            'a' => m_test.mode = BrushMode::Add,
+            'f' => m_test.mode = BrushMode::Subtract,
+            's' => m_test.size += 1,
+            'd' => m_test.size = if m_test.size == 1 { 1 } else { m_test.size - 1 },
             _ => {}
-        },
+        });
+        (m_test.mode, m_test.size)
+    };
+
+    match event {
         Event::Mouse(ev) => match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {
                 base_brush(
                     ev,
                     state,
-                    frame_state,
-                    |state, frame_state, new_luma, col, row| {
-                        let old_luma = LUMA_VALUES
-                            .iter()
-                            .position(|&val| {
-                                val == state.virtual_display[usize::from(col)][usize::from(row)]
-                                    .brush
-                            })
+                    size.try_into().unwrap(),
+                    |state: &mut State, new_luma: usize, col: u16, row: u16| {
+                        let old_luma = state
+                            .virtual_display
+                            .get(col, row)
+                            .and_then(|el| LUMA_VALUES.into_iter().position(|x| x == el.brush))
                             .unwrap_or(0);
-                        let luma_value = match state.brush_mode {
+                        let old_luma = old_luma / 4 + (rand::random::<u8>() / 4) as usize;
+                        let luma_value = match mode {
                             BrushMode::Add => {
                                 LUMA_VALUES[min(old_luma + new_luma, LUMA_VALUES.len() - 1)]
                             }
-
                             BrushMode::Subtract => {
                                 LUMA_VALUES[if old_luma < new_luma {
                                     0
@@ -83,15 +82,15 @@ pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State, frame_state:
                                 }]
                             }
                         };
-                        state.virtual_display[usize::from(col)][usize::from(row)] = Layer {
-                            brush: luma_value,
-                            brush_color: state.brush_color,
-                            changed: true,
-                            x: col,
-                            y: row,
-                        };
-                        // state.redo_layers = vec![];
-                        frame_state.need_repaint = true;
+                        state.virtual_display.set(
+                            col,
+                            row,
+                            Layer {
+                                brush: luma_value,
+                                brush_color: state.color,
+                                changed: true,
+                            },
+                        );
                     },
                 );
             }

@@ -16,24 +16,12 @@ use crossterm::{
     Result,
 };
 
-// use crate::command::command;
-// use crate::content_brush::content_brush;
 use crate::data::*;
 use crate::modes::Mode;
-// use crate::modes;
-// use crate::eyedropper::eyedropper;
-// use crate::insert::insert;
-// use crate::pencil::pencil;
 
 mod data;
+mod handlers;
 mod modes;
-
-const HELP: &str = r#"EventStream based on futures_util::Stream with tokio
- - Keyboard, mouse and terminal resize events enabled
- - Prints "." every second if there's no event
- - Hit "c" to print current cursor position
- - Use Esc to quit
-"#;
 
 const LUMA_VALUES: [char; 92] = [
     ' ', '`', '.', '-', '\'', ':', '_', ',', '^', '=', ';', '>', '<', '+', '!', 'r', 'c', '*', '/',
@@ -45,57 +33,55 @@ const LUMA_VALUES: [char; 92] = [
 
 fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color>) -> bool {
     if event == Event::Key(KeyCode::Esc.into()) {
-        if state.mode == Mode::Command {
-            return false;
+        match state.mode {
+            Mode::Command => {
+                return false;
+            }
+            _ => {}
         }
         queue!(stdout, cursor::Hide).unwrap();
         state.mode = Mode::Command;
         state.command = Command::EnterCommandMode;
     }
 
-    let mut frame_state = FrameState {
-        need_repaint: false,
-    };
-
-    queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
+    queue!(stdout, SetForegroundColor(state.color)).unwrap();
     match state.mode {
         Mode::Command => {
-            modes::command(event, stdout, state, &mut frame_state, &colors);
+            modes::command(event, stdout, state, &colors);
         }
         Mode::Insert => {
-            modes::insert(event, stdout, state, &mut frame_state);
+            modes::insert(event, stdout, state);
         }
-        Mode::Pencil => {
-            modes::pencil(event, stdout, state, &mut frame_state);
+        Mode::Pencil(_) => {
+            modes::pencil(event, stdout, state);
         }
         Mode::ContentBrush => {
-            modes::content_brush(event, stdout, state, &mut frame_state);
+            modes::content_brush(event, stdout, state);
         }
         Mode::Eyedropper => {
-            modes::eyedropper(event, stdout, state, &mut frame_state);
+            modes::eyedropper(event, stdout, state);
         }
-        Mode::Brush => {
-            modes::brush(event, stdout, state, &mut frame_state);
+        Mode::Brush(_) => {
+            modes::brush(event, stdout, state);
         }
     }
     // if ev.modifiers == KeyModifiers::SHIFT {
     //     print!("{:?}", ev);
     // }
     let mut repainted = vec![];
-    if frame_state.need_repaint {
+    if state.virtual_display.need_repaint {
         state.repaint_counter += 1;
-        for (col_index, column) in state.virtual_display.iter().enumerate() {
-            for (i, element) in column.iter().enumerate() {
+        for (col, column) in state.virtual_display.vd.iter().enumerate() {
+            for (row, element) in column.iter().enumerate() {
                 if element.changed {
                     queue!(
                         stdout,
-                        cursor::MoveTo(element.x, element.y),
+                        cursor::MoveTo(col as u16, row as u16),
                         SetForegroundColor(element.brush_color),
                         crossterm::style::Print(element.brush)
                     )
                     .unwrap();
-                    repainted.push((col_index, i));
-                    // element.changed = false;
+                    repainted.push((col, row));
                 }
             }
         }
@@ -130,7 +116,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     }
 
     for r in repainted.iter() {
-        state.virtual_display[r.0][r.1].changed = false;
+        state.virtual_display.vd[r.0][r.1].changed = false;
     }
 
     stdout.flush().unwrap();
@@ -147,7 +133,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
     let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
     let left_pad = " ".repeat((max_x as usize / 2) - (mode_text.len() + 5));
-    let right_pad = " ".repeat((max_x as usize / 2) - pos_text.len());
+    let right_pad =
+        " ".repeat((max_x as usize / 2) - pos_text.len() + if max_x % 2 == 0 { 0 } else { 1 });
     queue!(
         stdout,
         SetAttribute(Attribute::Bold),
@@ -158,8 +145,8 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         crossterm::style::Print(left_pad),
         SetBackgroundColor(bar_color),
         crossterm::style::Print(" ["),
-        SetForegroundColor(state.brush_color),
-        crossterm::style::Print(state.brush),
+        SetForegroundColor(state.color),
+        crossterm::style::Print("T"),
         SetForegroundColor(Color::Black),
         crossterm::style::Print("] "),
         SetBackgroundColor(Color::DarkGrey),
@@ -197,30 +184,12 @@ async fn event_handler() {
     let mut state = State {
         repaint_counter: 0,
         mode: Mode::Command,
-        brush: '*',
-        brush_color: Color::White,
-        brush_mode: BrushMode::Subtract,
+        color: Color::White,
         pos: (0, 0),
         command: Command::None,
         drag_pos: (0, 0),
-        virtual_display: Vec::with_capacity(termsize.0.into()),
-        // history: vec![],
-        // redo_layers: vec![],
+        virtual_display: Display::new(termsize.0, termsize.1),
     };
-
-    for n in 0..termsize.0 {
-        let mut nested = Vec::with_capacity(termsize.1.into());
-        for i in 0..termsize.1 {
-            nested.push(Layer {
-                brush: ' ',
-                brush_color: Color::White,
-                changed: false,
-                x: n,
-                y: i,
-            })
-        }
-        state.virtual_display.push(nested);
-    }
 
     let colors: Vec<Color> = {
         use Color::*;
@@ -278,8 +247,6 @@ async fn event_handler() {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("{}", HELP);
-
     enable_raw_mode()?;
 
     let mut stdout = stdout();

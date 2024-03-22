@@ -6,12 +6,7 @@ use crossterm::{
     terminal,
 };
 
-pub fn content_brush(
-    event: Event,
-    _stdout: &mut Stdout,
-    state: &mut State,
-    frame_state: &mut FrameState,
-) {
+pub fn content_brush(event: Event, _stdout: &mut Stdout, state: &mut State) {
     match event {
         Event::Mouse(ev) => match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {
@@ -29,21 +24,25 @@ pub fn content_brush(
                         average_luma += LUMA_VALUES
                             .iter()
                             .position(|&val| {
-                                val == state.virtual_display[usize::from(n)][usize::from(i)].brush
+                                val == state
+                                    .virtual_display
+                                    .get(n, i)
+                                    .and_then(|el| Some(el.brush))
+                                    .unwrap_or('a')
                             })
                             .unwrap_or(50);
                     }
                 }
                 average_luma = average_luma / divider;
-                state.virtual_display[usize::from(ev.column)][usize::from(ev.row)] = Layer {
-                    brush: LUMA_VALUES[average_luma],
-                    brush_color: state.brush_color,
-                    changed: true,
-                    x: ev.column,
-                    y: ev.row,
-                };
-                // state.redo_layers = vec![];
-                frame_state.need_repaint = true;
+                state.virtual_display.set(
+                    ev.column,
+                    ev.row,
+                    Layer {
+                        brush: LUMA_VALUES[average_luma],
+                        brush_color: state.color,
+                        changed: true,
+                    },
+                );
             }
             _ => {}
         },

@@ -7,24 +7,41 @@ mod pencil;
 
 use std::fmt;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Clone)]
 pub enum Mode {
-    Brush,
-    Pencil,
+    Brush(BrushData),
+    Pencil(PencilData),
     Insert,
     Command,
     Eyedropper,
     ContentBrush,
 }
 
+#[derive(Clone, Copy)]
+pub struct PencilData {
+    pub pencil: char,
+}
+
+#[derive(Clone)]
+pub struct BrushData {
+    size: u8,
+    mode: BrushMode,
+}
+
+#[derive(Copy, Clone)]
+pub enum BrushMode {
+    Add,
+    Subtract,
+}
+
 impl Mode {
     pub fn get_color(&self) -> Color {
         match self {
-            Mode::Brush => Color::DarkGreen,
+            Mode::Brush(_) => Color::DarkGreen,
             Mode::Eyedropper => Color::DarkMagenta,
             Mode::Command => Color::DarkRed,
             Mode::Insert => Color::DarkCyan,
-            Mode::Pencil => Color::DarkYellow,
+            Mode::Pencil(_) => Color::DarkYellow,
             Mode::ContentBrush => Color::Green,
         }
     }
@@ -36,11 +53,11 @@ impl Display for Mode {
             f,
             "{}",
             match self {
-                Mode::Brush => "BRUSH",
+                Mode::Brush(_) => "BRUSH",
                 Mode::Eyedropper => "EYEDROPPER",
                 Mode::Command => "COMMAND",
                 Mode::Insert => "INSERT",
-                Mode::Pencil => "PENCIL",
+                Mode::Pencil(_) => "PENCIL",
                 Mode::ContentBrush => "CONTENT BRUSH",
             }
         )

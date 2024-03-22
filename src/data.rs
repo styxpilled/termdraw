@@ -4,27 +4,60 @@ use crossterm::style::Color;
 pub struct State {
     pub repaint_counter: u32,
     pub mode: Mode,
-    pub brush: char,
-    pub brush_color: Color,
-    pub brush_mode: BrushMode,
+    pub color: Color,
     pub pos: (u16, u16),
     pub command: Command,
     pub drag_pos: (u16, u16),
     // pub history: Vec<HistoryPage>,
-    pub virtual_display: Vec<Vec<Layer>>,
+    pub virtual_display: Display,
     // pub redo_layers: Vec<HistoryPage>,
 }
 
-pub struct FrameState {
+pub struct Display {
+    pub vd: Vec<Vec<Layer>>,
     pub need_repaint: bool,
+}
+
+impl Display {
+    pub fn new(width: u16, height: u16) -> Display {
+        let width = width as usize;
+        let height = height as usize;
+        let mut virtual_display = Vec::with_capacity(width);
+        for n in 0..width {
+            let mut nested = Vec::with_capacity(height);
+            for i in 0..height {
+                nested.push(Layer {
+                    brush: ' ',
+                    brush_color: Color::White,
+                    changed: false,
+                })
+            }
+            virtual_display.push(nested);
+        }
+        Display {
+            vd: virtual_display,
+            need_repaint: false,
+        }
+    }
+    pub fn set(&mut self, col: u16, row: u16, layer: Layer) {
+        let col = col as usize;
+        let row = row as usize;
+        if col < self.vd.len() - 1 && row < self.vd[0].len() - 1 {
+            self.vd[col][row] = layer;
+            self.need_repaint = true;
+        }
+    }
+    pub fn get(&self, col: u16, row: u16) -> Option<&Layer> {
+        let col = col as usize;
+        let row = row as usize;
+        self.vd.get(col)?.get(row)
+    }
 }
 
 #[derive(Copy, Clone)]
 pub struct Layer {
     pub brush: char,
     pub brush_color: Color,
-    pub x: u16,
-    pub y: u16,
     pub changed: bool,
 }
 
@@ -32,12 +65,6 @@ pub struct Layer {
 pub struct TextLayer {
     pub brush: char,
     pub color: Color,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum BrushMode {
-    Add,
-    Subtract,
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
