@@ -3,7 +3,7 @@ use std::io::Stdout;
 use crate::data::*;
 use crossterm::event::{Event, MouseButton, MouseEventKind};
 
-pub fn eyedropper(event: Event, _stdout: &mut Stdout, state: &mut State) {
+pub fn eyedropper(event: &Event, _stdout: &mut Stdout, state: &mut State) {
     match event {
         Event::Mouse(ev) => match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {

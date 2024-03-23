@@ -2,7 +2,7 @@ use std::io::Stdout;
 
 use crate::{data::*, handlers::handle_keychar, LUMA_VALUES};
 use crossterm::{
-    event::{Event, KeyCode, MouseButton, MouseEvent, MouseEventKind},
+    event::{Event, MouseButton, MouseEvent, MouseEventKind},
     terminal,
 };
 
@@ -10,7 +10,7 @@ use std::cmp::min;
 
 use super::BrushMode;
 
-pub fn base_brush<F>(ev: MouseEvent, state: &mut State, radius: i32, mut f: F)
+pub fn base_brush<F>(ev: &MouseEvent, state: &mut State, radius: i32, mut f: F)
 where
     F: FnMut(&mut State, usize, u16, u16),
 {
@@ -40,7 +40,7 @@ where
     }
 }
 
-pub fn brush(event: Event, _stdout: &mut Stdout, state: &mut State) {
+pub fn brush(event: &Event, _stdout: &mut Stdout, state: &mut State) {
     let (mode, size) = {
         let m_test = match &mut state.mode {
             super::Mode::Brush(t) => t,

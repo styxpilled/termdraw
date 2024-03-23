@@ -7,7 +7,7 @@ use crossterm::{
     queue,
 };
 
-pub fn pencil(event: Event, stdout: &mut Stdout, state: &mut State) {
+pub fn pencil(event: &Event, stdout: &mut Stdout, state: &mut State) {
     let m_test = match &mut state.mode {
         super::Mode::Pencil(t) => t,
         _ => unreachable!(),

@@ -6,7 +6,7 @@ use crossterm::{
     terminal,
 };
 
-pub fn content_brush(event: Event, _stdout: &mut Stdout, state: &mut State) {
+pub fn content_brush(event: &Event, _stdout: &mut Stdout, state: &mut State) {
     match event {
         Event::Mouse(ev) => match ev.kind {
             MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {

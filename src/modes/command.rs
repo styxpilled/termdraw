@@ -9,7 +9,7 @@ use crossterm::{
 };
 use std::io::Stdout;
 
-pub fn command(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color>) {
+pub fn command(event: &Event, stdout: &mut Stdout, state: &mut State) {
     handle_keychar(&event, |c| {
         state.command = match c {
             'i' => {
@@ -43,12 +43,13 @@ pub fn command(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Ve
             }
             'f' => {
                 // TODO: support rgb color
-                let n = colors
+                let n = state
+                    .colors
                     .iter()
                     .position(|n| n == &state.color)
                     .unwrap_or_default();
-                let index = if n + 1 < colors.len() { n + 1 } else { 0 };
-                state.color = colors[index];
+                let index = if n + 1 < state.colors.len() { n + 1 } else { 0 };
+                state.color = state.colors[index];
                 Command::Undo
             }
             'u' => {

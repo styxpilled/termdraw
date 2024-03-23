@@ -1,5 +1,7 @@
-use crate::modes::Mode;
-use crossterm::style::Color;
+use std::io::Stdout;
+
+use crate::modes::{self, Mode};
+use crossterm::{event::Event, style::Color};
 
 pub struct State {
     pub repaint_counter: u32,
@@ -8,9 +10,35 @@ pub struct State {
     pub pos: (u16, u16),
     pub command: Command,
     pub drag_pos: (u16, u16),
+    pub colors: Vec<Color>,
     // pub history: Vec<HistoryPage>,
     pub virtual_display: Display,
     // pub redo_layers: Vec<HistoryPage>,
+}
+
+impl State {
+    pub fn run(&mut self, event: &Event, stdout: &mut Stdout) {
+        match &self.mode {
+            Mode::Command => {
+                modes::command(&event, stdout, self);
+            }
+            Mode::Insert => {
+                modes::insert(&event, stdout, self);
+            }
+            Mode::Pencil(_) => {
+                modes::pencil(&event, stdout, self);
+            }
+            Mode::ContentBrush => {
+                modes::content_brush(&event, stdout, self);
+            }
+            Mode::Eyedropper => {
+                modes::eyedropper(&event, stdout, self);
+            }
+            Mode::Brush(_) => {
+                modes::brush(&event, stdout, self);
+            }
+        }
+    }
 }
 
 pub struct Display {

@@ -15,6 +15,7 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
+use handlers::handle_click;
 
 use crate::data::*;
 use crate::modes::Mode;
@@ -31,7 +32,8 @@ const LUMA_VALUES: [char; 92] = [
     'm', '8', 'R', 'D', '#', '$', 'B', 'g', '0', 'M', 'N', 'W', 'Q', '%', '&', '@',
 ];
 
-fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color>) -> bool {
+fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
+    // Handle qutting
     if event == Event::Key(KeyCode::Esc.into()) {
         match state.mode {
             Mode::Command => {
@@ -44,97 +46,74 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         state.command = Command::EnterCommandMode;
     }
 
-    queue!(stdout, SetForegroundColor(state.color)).unwrap();
-    match state.mode {
-        Mode::Command => {
-            modes::command(event, stdout, state, &colors);
-        }
-        Mode::Insert => {
-            modes::insert(event, stdout, state);
-        }
-        Mode::Pencil(_) => {
-            modes::pencil(event, stdout, state);
-        }
-        Mode::ContentBrush => {
-            modes::content_brush(event, stdout, state);
-        }
-        Mode::Eyedropper => {
-            modes::eyedropper(event, stdout, state);
-        }
-        Mode::Brush(_) => {
-            modes::brush(event, stdout, state);
-        }
-    }
-    // if ev.modifiers == KeyModifiers::SHIFT {
-    //     print!("{:?}", ev);
-    // }
-    let mut repainted = vec![];
-    if state.virtual_display.need_repaint {
-        state.repaint_counter += 1;
-        for (col, column) in state.virtual_display.vd.iter().enumerate() {
-            for (row, element) in column.iter().enumerate() {
-                if element.changed {
-                    queue!(
-                        stdout,
-                        cursor::MoveTo(col as u16, row as u16),
-                        SetForegroundColor(element.brush_color),
-                        crossterm::style::Print(element.brush)
-                    )
-                    .unwrap();
-                    repainted.push((col, row));
-                }
-            }
-        }
-        // for page in state.history.clone() {
-        //     match page {
-        //         HistoryPage::Pencil(page) => {
-        //             queue!(
-        //                 stdout,
-        //                 cursor::MoveTo(page.x, page.y),
-        //                 SetForegroundColor(page.brush_color),
-        //                 crossterm::style::Print(page.brush)
-        //             )
-        //             .unwrap();
-        //         }
-        //         HistoryPage::Insert(page) => {
-        //             queue!(
-        //                 stdout,
-        //                 SetForegroundColor(page.color),
-        //                 crossterm::style::Print(page.brush)
-        //             )
-        //             .unwrap();
-        //         }
-        //         HistoryPage::Cmd(cmd) => match cmd {
-        //             Cmdnum::MoveLeft(n) => queue!(stdout, cursor::MoveLeft(n)).unwrap(),
-        //             Cmdnum::MoveRight(n) => queue!(stdout, cursor::MoveRight(n)).unwrap(),
-        //             Cmdnum::MoveUp(n) => queue!(stdout, cursor::MoveUp(n)).unwrap(),
-        //             Cmdnum::MoveDown(n) => queue!(stdout, cursor::MoveDown(n)).unwrap(),
-        //             Cmdnum::MoveTo(x, y) => queue!(stdout, cursor::MoveTo(x, y)).unwrap(),
-        //         },
-        //     }
-        // }
-    }
-
-    for r in repainted.iter() {
-        state.virtual_display.vd[r.0][r.1].changed = false;
-    }
-
-    stdout.flush().unwrap();
-
-    match state.mode {
-        Mode::Insert => queue!(stdout, cursor::Show).unwrap(),
-        _ => {}
-    }
-
+    // Get current x, y, size
     let (x, y) = position().unwrap_or_default();
     let (max_x, max_y) = size().unwrap_or_default();
+    // Skip gets used to skip processing of an event if it's already been processed
+    let mut skip = false;
+
+    // TODO: process resizing
+    // match &event {
+    //     Event::Resize(new_width, new_height) => {}
+    //     _ => {}
+    // }
+
+    // Color palette
+    // TODO: custom colors
+    handle_click(&event, |_, col, row| {
+        if row + 1 == max_y {
+            let offset = format!(" {} ", state.mode).len() as u16 + 1;
+            if col > offset && col < offset + 16 {
+                state.color = state.colors[(col - offset) as usize];
+            }
+            skip = true;
+        }
+    });
+
+    queue!(stdout, SetForegroundColor(state.color)).unwrap();
+    // Process the event onto the virtual display
+    if !skip {
+        state.run(&event, stdout);
+    }
+
+    // Draw all changes on the canvas if they need changes
+    if state.virtual_display.need_repaint {
+        state.repaint_counter += 1;
+        // We loop over everything instead of using some sort of changed cache because that sounds complicated and we're not looping much. Computers are fast.
+        for (col_pos, column) in state.virtual_display.vd.iter_mut().enumerate() {
+            for (row_pos, element) in column.iter_mut().enumerate() {
+                if !element.changed {
+                    continue;
+                }
+                queue!(
+                    stdout,
+                    cursor::MoveTo(col_pos as u16, row_pos as u16),
+                    SetForegroundColor(element.brush_color),
+                    crossterm::style::Print(element.brush)
+                )
+                .unwrap();
+                element.changed = false;
+            }
+        }
+    }
+
+    // Flush all of the canvas re-drawing before drawing the bottom UI
+    // Not necessary
+    stdout.flush().unwrap();
+
+    if let Mode::Insert = state.mode {
+        queue!(stdout, cursor::Show).unwrap();
+    }
+
     queue!(stdout, cursor::MoveTo(0, max_y)).unwrap();
     let bar_color = state.mode.get_color();
     let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
-    let left_pad = " ".repeat((max_x as usize / 2) - (mode_text.len() + 5));
+    let left_pad = " ".repeat((max_x as usize / 4) - (mode_text.len() + 5));
     let right_pad =
         " ".repeat((max_x as usize / 2) - pos_text.len() + if max_x % 2 == 0 { 0 } else { 1 });
+
+    // MODE
     queue!(
         stdout,
         SetAttribute(Attribute::Bold),
@@ -142,28 +121,40 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State, colors: &Vec<Color
         SetForegroundColor(Color::Black),
         crossterm::style::Print(mode_text),
         SetBackgroundColor(Color::DarkGrey),
+        crossterm::style::Print(" "),
+    )
+    .unwrap();
+
+    for col in state.colors.iter() {
+        queue!(
+            stdout,
+            SetForegroundColor(*col),
+            crossterm::style::Print("@")
+        )
+        .unwrap();
+    }
+
+    queue!(
+        stdout,
+        // LEFT PAD
         crossterm::style::Print(left_pad),
+        // CURRENT COLOR
         SetBackgroundColor(bar_color),
+        SetForegroundColor(Color::Black),
         crossterm::style::Print(" ["),
         SetForegroundColor(state.color),
         crossterm::style::Print("T"),
         SetForegroundColor(Color::Black),
         crossterm::style::Print("] "),
         SetBackgroundColor(Color::DarkGrey),
+        // RIGHT PAD
         crossterm::style::Print(right_pad),
+        // INFO
         SetBackgroundColor(bar_color),
         crossterm::style::Print(pos_text),
     )
     .unwrap();
-    // let info_display = (format!("{mode_text} MODE, pos: ({x}, {y}), max_pos: ({max_x}, {googa}), drag pos: ({}, {}), brush: ",
-    // state.drag_pos.0, state.drag_pos.1),
-    // format!(", last command: {:?}", state.command));
-    // let pad = " ".repeat(max_x as usize - (info_display.0.len() + info_display.1.len()));
-    // print!("{}", info_display.0);
-    // queue!(stdout, SetForegroundColor(state.brush_color)).unwrap();
-    // print!("{}", state.brush);
-    // queue!(stdout, SetForegroundColor(Color::Red)).unwrap();
-    // print!("{pad}");
+
     queue!(
         stdout,
         cursor::MoveTo(x, y),
@@ -187,31 +178,9 @@ async fn event_handler() {
         color: Color::White,
         pos: (0, 0),
         command: Command::None,
+        colors: generate_colors(),
         drag_pos: (0, 0),
         virtual_display: Display::new(termsize.0, termsize.1),
-    };
-
-    let colors: Vec<Color> = {
-        use Color::*;
-        vec![
-            // Reset,
-            White,
-            Grey,
-            Black,
-            DarkGrey,
-            Red,
-            DarkRed,
-            Green,
-            DarkGreen,
-            Yellow,
-            DarkYellow,
-            Blue,
-            DarkBlue,
-            Magenta,
-            DarkMagenta,
-            Cyan,
-            DarkCyan,
-        ]
     };
 
     let mut stdoout_temp = stdout();
@@ -219,7 +188,6 @@ async fn event_handler() {
         crossterm::event::Event::FocusGained,
         &mut stdoout_temp,
         &mut state,
-        &colors,
     );
 
     loop {
@@ -232,10 +200,9 @@ async fn event_handler() {
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        match draw(event, &mut stdout, &mut state, &colors) {
-                            false => break,
-                            true => {}
-                        };
+                        if let false = draw(event, &mut stdout, &mut state) {
+                            break;
+                        }
                     }
                     Some(Err(e)) => println!("Error: {:?}\r", e),
                     None => break,
@@ -243,6 +210,29 @@ async fn event_handler() {
             }
         };
     }
+}
+
+fn generate_colors() -> Vec<Color> {
+    use Color::*;
+    vec![
+        // Reset,
+        White,
+        Grey,
+        Black,
+        DarkGrey,
+        Red,
+        DarkRed,
+        Green,
+        DarkGreen,
+        Yellow,
+        DarkYellow,
+        Blue,
+        DarkBlue,
+        Magenta,
+        DarkMagenta,
+        Cyan,
+        DarkCyan,
+    ]
 }
 
 #[tokio::main]
@@ -265,3 +255,32 @@ async fn main() -> Result<()> {
 
     disable_raw_mode()
 }
+
+// for page in state.history.clone() {
+//     match page {
+//         HistoryPage::Pencil(page) => {
+//             queue!(
+//                 stdout,
+//                 cursor::MoveTo(page.x, page.y),
+//                 SetForegroundColor(page.brush_color),
+//                 crossterm::style::Print(page.brush)
+//             )
+//             .unwrap();
+//         }
+//         HistoryPage::Insert(page) => {
+//             queue!(
+//                 stdout,
+//                 SetForegroundColor(page.color),
+//                 crossterm::style::Print(page.brush)
+//             )
+//             .unwrap();
+//         }
+//         HistoryPage::Cmd(cmd) => match cmd {
+//             Cmdnum::MoveLeft(n) => queue!(stdout, cursor::MoveLeft(n)).unwrap(),
+//             Cmdnum::MoveRight(n) => queue!(stdout, cursor::MoveRight(n)).unwrap(),
+//             Cmdnum::MoveUp(n) => queue!(stdout, cursor::MoveUp(n)).unwrap(),
+//             Cmdnum::MoveDown(n) => queue!(stdout, cursor::MoveDown(n)).unwrap(),
+//             Cmdnum::MoveTo(x, y) => queue!(stdout, cursor::MoveTo(x, y)).unwrap(),
+//         },
+//     }
+// }

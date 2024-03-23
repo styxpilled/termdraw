@@ -7,7 +7,7 @@ use crossterm::{
     execute, queue,
 };
 
-pub fn insert(event: Event, stdout: &mut Stdout, state: &mut State) {
+pub fn insert(event: &Event, stdout: &mut Stdout, state: &mut State) {
     handle_keyboard(&event, |key| {
         let (col, row) = position().unwrap_or_default();
         match key.code {
