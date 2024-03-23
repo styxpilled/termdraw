@@ -23,7 +23,7 @@ impl State {
                 modes::insert(&event, stdout, self);
             }
             Mode::Pencil(_) => {
-                modes::pencil(&event, stdout, self);
+                modes::pencil(&event, self);
             }
             Mode::ContentBrush => {
                 modes::content_brush(&event, stdout, self);
@@ -35,6 +35,14 @@ impl State {
                 modes::brush(&event, stdout, self);
             }
         }
+    }
+
+    pub fn eyedrop(&mut self, col: u16, row: u16) {
+        self.color = self
+            .virtual_display
+            .get(col, row)
+            .and_then(|el| Some(el.brush_color))
+            .unwrap_or_else(|| crossterm::style::Color::Black);
     }
 }
 

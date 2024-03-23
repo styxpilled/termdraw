@@ -63,9 +63,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     // process shortcuts
     process_shortcuts(&event, stdout, state);
 
-    // Color palette
     // TODO: custom colors
-    handle_click(&event, |_, col, row| {
+    handle_click(&event, |ev, col, row| {
+        // Color palette
         if row + 1 == max_y {
             let offset = format!(" {} ", state.mode).len() as u16 + 1;
             if col > offset && col < offset + 16 {
@@ -73,15 +73,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
             }
             skip = true;
         }
-    });
-
-    handle_click(&event, |ev, col, row| {
-        if ev.modifiers.contains(KeyModifiers::ALT) {
-            state.color = state
-                .virtual_display
-                .get(col, row)
-                .and_then(|el| Some(el.brush_color))
-                .unwrap_or_else(|| crossterm::style::Color::Black);
+        // Process ALT-eyedropper
+        else if ev.modifiers.contains(KeyModifiers::ALT) {
+            state.eyedrop(col, row);
             skip = true;
         }
     });
@@ -117,6 +111,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     // Not necessary
     stdout.flush().unwrap();
 
+    // TODO: only redraw ui on changes
     if let Mode::Insert = state.mode {
         queue!(stdout, cursor::Show).unwrap();
     }

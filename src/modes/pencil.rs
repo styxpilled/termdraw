@@ -1,84 +1,26 @@
-use std::io::Stdout;
-
-use crate::data::*;
-use crossterm::{
-    cursor::{self, position},
-    event::{Event, KeyCode, MouseButton, MouseEventKind},
-    queue,
+use crate::{
+    data::*,
+    handlers::{handle_click, handle_keychar},
 };
+use crossterm::event::Event;
 
-pub fn pencil(event: &Event, stdout: &mut Stdout, state: &mut State) {
+pub fn pencil(event: &Event, state: &mut State) {
     let m_test = match &mut state.mode {
         super::Mode::Pencil(t) => t,
         _ => unreachable!(),
     };
-    match event {
-        Event::Mouse(ev) => match ev.kind {
-            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Down(MouseButton::Left) => {
-                // queue!(
-                //     stdout,
-                //     cursor::MoveTo(ev.column, ev.row),
-                //     crossterm::style::Print(state.brush)
-                // )
-                // .unwrap();
-                // state.history.push(HistoryPage::Pencil(Layer {
-                //     brush: state.brush,
-                //     brush_color: state.brush_color,
-                //     changed: true,
-                //     x: ev.column,
-                //     y: ev.row,
-                // }));
-                state.virtual_display.set(
-                    ev.column,
-                    ev.row,
-                    Layer {
-                        brush: m_test.pencil,
-                        brush_color: state.color,
-                        changed: true,
-                    },
-                );
-                // state.redo_layers = vec![];
-            }
-            // MouseEventKind::Up()
-            MouseEventKind::Down(MouseButton::Right) => {
-                state.drag_pos = position().unwrap_or_default();
-            }
-            MouseEventKind::Drag(MouseButton::Right) => {
-                queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
-                for _ in state.drag_pos.0..ev.column {
-                    queue!(stdout, crossterm::style::Print(m_test.pencil),).unwrap();
-                }
-                for _ in state.drag_pos.1..ev.row {
-                    queue!(
-                        stdout,
-                        crossterm::style::Print(m_test.pencil),
-                        cursor::MoveLeft(1),
-                        cursor::MoveDown(1)
-                    )
-                    .unwrap();
-                }
-                queue!(stdout, cursor::MoveTo(state.drag_pos.0, state.drag_pos.1),).unwrap();
-                for _ in state.drag_pos.1..ev.row {
-                    queue!(
-                        stdout,
-                        crossterm::style::Print(m_test.pencil),
-                        cursor::MoveLeft(1),
-                        cursor::MoveDown(1)
-                    )
-                    .unwrap();
-                }
-                for _ in state.drag_pos.0..ev.column {
-                    queue!(stdout, crossterm::style::Print(m_test.pencil),).unwrap();
-                }
-            }
-            _ => {}
-        },
-        Event::Key(ev) => match ev.code {
-            KeyCode::Char(code) => {
-                m_test.pencil = code;
-            }
-            _ => {}
-        },
-        _ => {}
-    }
+    handle_click(event, |_, col, row| {
+        state.virtual_display.set(
+            col,
+            row,
+            Layer {
+                brush: m_test.pencil,
+                brush_color: state.color,
+                changed: true,
+            },
+        );
+    });
+    handle_keychar(event, |code| {
+        m_test.pencil = code;
+    });
 }
