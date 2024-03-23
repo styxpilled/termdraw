@@ -34,6 +34,9 @@ impl State {
             Mode::Brush(_) => {
                 modes::brush(&event, stdout, self);
             }
+            Mode::Hex(_) => {
+                modes::hex(&event, self);
+            }
         }
     }
 
@@ -108,6 +111,7 @@ pub enum Command {
     _Undo,
     _Redo,
     None,
+    Hex,
 }
 
 impl Display for Command {
@@ -119,6 +123,7 @@ impl Display for Command {
                 Command::Enter(mode) => format!("ENTER {}", mode),
                 Command::Clear => "CLEAR".to_string(),
                 Command::None => "REDO".to_string(),
+                Command::Hex => "HEX".to_string(),
                 // Command::Undo => "UNDO".to_string(),
                 // Command::Redo => "REDO".to_string(),
                 _ => "".to_string(),

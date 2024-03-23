@@ -60,9 +60,6 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     //     _ => {}
     // }
 
-    // process shortcuts
-    process_shortcuts(&event, stdout, state);
-
     // TODO: custom colors
     handle_click(&event, |ev, col, row| {
         // Color palette
@@ -85,6 +82,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     if !skip {
         state.run(&event, stdout);
     }
+
+    // process shortcuts
+    process_shortcuts(&event, stdout, state);
 
     // Draw all changes on the canvas if they need changes
     if state.virtual_display.need_repaint {
@@ -120,9 +120,6 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     let bar_color = state.mode.get_color();
     let mode_text = format!(" {} ", state.mode);
     let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
-    let left_pad = " ".repeat((max_x as usize / 4) - (mode_text.len() + 5));
-    let right_pad =
-        " ".repeat((max_x as usize / 2) - pos_text.len() + if max_x % 2 == 0 { 0 } else { 1 });
 
     // MODE
     queue!(
@@ -170,9 +167,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
         crossterm::style::Print("T"),
         SetForegroundColor(Color::Black),
         crossterm::style::Print("] "),
-        SetBackgroundColor(Color::DarkGrey),
         // RIGHT PAD
-        crossterm::style::Print(right_pad),
+        SetBackgroundColor(Color::DarkGrey),
+        crossterm::style::Print(" "),
         // INFO
         SetBackgroundColor(bar_color),
         crossterm::style::Print(pos_text),

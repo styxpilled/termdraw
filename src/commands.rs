@@ -1,4 +1,4 @@
-use crate::modes::{self, Mode};
+use crate::modes::{self, BrushData, HexData, Mode, PencilData};
 use crate::{data::*, handlers::handle_keychar};
 use crossterm::{
     cursor,
@@ -17,7 +17,7 @@ pub fn process_shortcuts(event: &Event, stdout: &mut Stdout, state: &mut State) 
                 Command::Enter(state.mode.clone())
             }
             'd' => {
-                state.mode = Mode::Pencil(modes::PencilData { pencil: '*' });
+                state.mode = Mode::Pencil(PencilData { pencil: '*' });
                 Command::Enter(state.mode.clone())
             }
             'e' => {
@@ -25,10 +25,7 @@ pub fn process_shortcuts(event: &Event, stdout: &mut Stdout, state: &mut State) 
                 Command::Enter(state.mode.clone())
             }
             'b' => {
-                state.mode = Mode::Brush(modes::BrushData {
-                    size: 1,
-                    mode: modes::BrushMode::Add,
-                });
+                state.mode = Mode::Brush(BrushData::default());
                 Command::Enter(state.mode.clone())
             }
             'c' => {
@@ -39,6 +36,10 @@ pub fn process_shortcuts(event: &Event, stdout: &mut Stdout, state: &mut State) 
                 queue!(stdout, Clear(ClearType::All)).unwrap();
                 // state.history = vec![];
                 Command::Clear
+            }
+            'h' => {
+                state.mode = Mode::Hex(HexData::default());
+                Command::Enter(state.mode.clone())
             }
             // 'f' => {
             //     // TODO: support rgb color
