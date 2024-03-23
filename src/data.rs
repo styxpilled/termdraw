@@ -29,7 +29,7 @@ impl State {
                 modes::content_brush(&event, stdout, self);
             }
             Mode::Eyedropper => {
-                modes::eyedropper(&event, stdout, self);
+                modes::eyedropper(&event, self);
             }
             Mode::Brush(_) => {
                 modes::brush(&event, stdout, self);

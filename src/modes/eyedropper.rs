@@ -1,8 +1,7 @@
 use crate::{data::*, handlers::handle_click};
 use crossterm::event::Event;
-use std::io::Stdout;
 
-pub fn eyedropper(event: &Event, _: &mut Stdout, state: &mut State) {
+pub fn eyedropper(event: &Event, state: &mut State) {
     handle_click(event, |_, col, row| {
         state
             .virtual_display

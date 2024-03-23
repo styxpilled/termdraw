@@ -8,15 +8,15 @@ use futures::{future::FutureExt, select, StreamExt};
 use futures_timer::Delay;
 
 use crossterm::{
-    cursor,
-    cursor::position,
-    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
+    cursor::{self, position},
+    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers},
     execute, queue,
     style::{Attribute, Color, SetAttribute, SetBackgroundColor, SetForegroundColor},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
-use handlers::handle_click;
+use handlers::{handle_click, handle_mouse};
+use modes::eyedropper;
 
 use crate::data::*;
 use crate::modes::Mode;
@@ -71,6 +71,17 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
             if col > offset && col < offset + 16 {
                 state.color = state.colors[(col - offset) as usize];
             }
+            skip = true;
+        }
+    });
+
+    handle_click(&event, |ev, col, row| {
+        if ev.modifiers.contains(KeyModifiers::ALT) {
+            state.color = state
+                .virtual_display
+                .get(col, row)
+                .and_then(|el| Some(el.brush_color))
+                .unwrap_or_else(|| crossterm::style::Color::Black);
             skip = true;
         }
     });
