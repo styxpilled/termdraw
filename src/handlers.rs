@@ -40,9 +40,10 @@ pub fn handle_click<F>(event: &Event, mut f: F)
 where
     F: FnMut(&MouseButton, u16, u16),
 {
-    handle_mouse(event, |ev| {
-        if let MouseEventKind::Down(button) = ev.kind {
-            f(&button, ev.column, ev.row);
+    handle_mouse(event, |ev| match ev.kind {
+        MouseEventKind::Drag(btn) | MouseEventKind::Down(btn) => {
+            f(&btn, ev.column, ev.row);
         }
+        _ => {}
     });
 }

@@ -1,7 +1,6 @@
-use std::io::Stdout;
-
 use crate::modes::{self, Mode};
 use crossterm::{event::Event, style::Color};
+use std::{fmt, fmt::Display, io::Stdout};
 
 pub struct State {
     pub repaint_counter: u32,
@@ -12,16 +11,14 @@ pub struct State {
     pub drag_pos: (u16, u16),
     pub colors: Vec<Color>,
     // pub history: Vec<HistoryPage>,
-    pub virtual_display: Display,
+    pub virtual_display: Canvas,
     // pub redo_layers: Vec<HistoryPage>,
 }
 
 impl State {
     pub fn run(&mut self, event: &Event, stdout: &mut Stdout) {
         match &self.mode {
-            Mode::Command => {
-                modes::command(&event, stdout, self);
-            }
+            Mode::Command => {}
             Mode::Insert => {
                 modes::insert(&event, stdout, self);
             }
@@ -41,19 +38,19 @@ impl State {
     }
 }
 
-pub struct Display {
+pub struct Canvas {
     pub vd: Vec<Vec<Layer>>,
     pub need_repaint: bool,
 }
 
-impl Display {
-    pub fn new(width: u16, height: u16) -> Display {
+impl Canvas {
+    pub fn new(width: u16, height: u16) -> Canvas {
         let width = width as usize;
         let height = height as usize;
         let mut virtual_display = Vec::with_capacity(width);
-        for n in 0..width {
+        for _ in 0..width {
             let mut nested = Vec::with_capacity(height);
-            for i in 0..height {
+            for _ in 0..height {
                 nested.push(Layer {
                     brush: ' ',
                     brush_color: Color::White,
@@ -62,7 +59,7 @@ impl Display {
             }
             virtual_display.push(nested);
         }
-        Display {
+        Canvas {
             vd: virtual_display,
             need_repaint: false,
         }
@@ -95,17 +92,29 @@ pub struct TextLayer {
     pub color: Color,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
-    EnterContentBrushMode,
-    EnterEyedropperMode,
-    EnterCommandMode,
-    EnterInsertMode,
-    EnterPencilMode,
-    EnterBrushMode,
-    Save,
+    Enter(Mode),
+    _Save,
     Clear,
-    Undo,
-    Redo,
+    _Undo,
+    _Redo,
     None,
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Command::Enter(mode) => format!("ENTER {}", mode),
+                Command::Clear => "CLEAR".to_string(),
+                Command::None => "REDO".to_string(),
+                // Command::Undo => "UNDO".to_string(),
+                // Command::Redo => "REDO".to_string(),
+                _ => "".to_string(),
+            }
+        )
+    }
 }

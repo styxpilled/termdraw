@@ -1,5 +1,4 @@
 mod brush;
-mod command;
 mod content_brush;
 mod eyedropper;
 mod insert;
@@ -7,7 +6,7 @@ mod pencil;
 
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Mode {
     Brush(BrushData),
     Pencil(PencilData),
@@ -17,18 +16,18 @@ pub enum Mode {
     ContentBrush,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PencilData {
     pub pencil: char,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BrushData {
-    size: u8,
-    mode: BrushMode,
+    pub size: u8,
+    pub mode: BrushMode,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum BrushMode {
     Add,
     Subtract,
@@ -67,7 +66,6 @@ impl Display for Mode {
 use std::fmt::Display;
 
 pub use brush::brush;
-pub use command::command;
 pub use content_brush::content_brush;
 use crossterm::style::Color;
 pub use eyedropper::eyedropper;

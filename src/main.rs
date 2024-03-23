@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use commands::process_shortcuts;
 use futures::{future::FutureExt, select, StreamExt};
 use futures_timer::Delay;
 
@@ -20,6 +21,7 @@ use handlers::handle_click;
 use crate::data::*;
 use crate::modes::Mode;
 
+mod commands;
 mod data;
 mod handlers;
 mod modes;
@@ -43,7 +45,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
         }
         queue!(stdout, cursor::Hide).unwrap();
         state.mode = Mode::Command;
-        state.command = Command::EnterCommandMode;
+        state.command = Command::Enter(state.mode.clone());
     }
 
     // Get current x, y, size
@@ -57,6 +59,9 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     //     Event::Resize(new_width, new_height) => {}
     //     _ => {}
     // }
+
+    // process shortcuts
+    process_shortcuts(&event, stdout, state);
 
     // Color palette
     // TODO: custom colors
@@ -134,10 +139,23 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
         .unwrap();
     }
 
+    // COMMAND
+    queue!(
+        stdout,
+        crossterm::style::Print(" "),
+        SetAttribute(Attribute::Bold),
+        SetBackgroundColor(bar_color),
+        SetForegroundColor(Color::Black),
+        crossterm::style::Print(format!(" {} ", state.command)),
+        SetBackgroundColor(Color::DarkGrey),
+        crossterm::style::Print(" "),
+    )
+    .unwrap();
+
     queue!(
         stdout,
         // LEFT PAD
-        crossterm::style::Print(left_pad),
+        // crossterm::style::Print(left_pad),
         // CURRENT COLOR
         SetBackgroundColor(bar_color),
         SetForegroundColor(Color::Black),
@@ -180,7 +198,7 @@ async fn event_handler() {
         command: Command::None,
         colors: generate_colors(),
         drag_pos: (0, 0),
-        virtual_display: Display::new(termsize.0, termsize.1),
+        virtual_display: Canvas::new(termsize.0, termsize.1),
     };
 
     let mut stdoout_temp = stdout();
