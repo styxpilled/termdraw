@@ -1,4 +1,4 @@
-use crate::modes::{self, BrushData, HexData, Mode, PencilData};
+use crate::modes::{BrushData, HexData, Mode, PencilData};
 use crate::{data::*, handlers::handle_keychar};
 use crossterm::{
     cursor,

@@ -5,8 +5,8 @@ use crate::{
 use crossterm::event::Event;
 
 pub fn pencil(event: &Event, state: &mut State) {
-    let m_test = match &mut state.mode {
-        super::Mode::Pencil(t) => t,
+    let data = match &mut state.mode {
+        super::Mode::Pencil(data) => data,
         _ => unreachable!(),
     };
     handle_click(event, |_, col, row| {
@@ -14,13 +14,13 @@ pub fn pencil(event: &Event, state: &mut State) {
             col,
             row,
             Layer {
-                brush: m_test.pencil,
+                brush: data.pencil,
                 brush_color: state.color,
                 changed: true,
             },
         );
     });
     handle_keychar(event, |code| {
-        m_test.pencil = code;
+        data.pencil = code;
     });
 }

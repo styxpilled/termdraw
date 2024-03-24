@@ -1,5 +1,9 @@
 use crate::modes::{self, Mode};
-use crossterm::{event::Event, style::Color};
+use crossterm::{
+    event::Event,
+    queue,
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
+};
 use std::{fmt, fmt::Display, io::Stdout};
 
 pub struct State {
@@ -11,6 +15,7 @@ pub struct State {
     pub drag_pos: (u16, u16),
     pub colors: Vec<Color>,
     // pub history: Vec<HistoryPage>,
+    pub ui: UI,
     pub virtual_display: Canvas,
     // pub redo_layers: Vec<HistoryPage>,
 }
@@ -111,11 +116,11 @@ pub enum Command {
     _Undo,
     _Redo,
     None,
-    Hex,
+    _Hex,
 }
 
 impl Display for Command {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "{}",
@@ -123,11 +128,85 @@ impl Display for Command {
                 Command::Enter(mode) => format!("ENTER {}", mode),
                 Command::Clear => "CLEAR".to_string(),
                 Command::None => "REDO".to_string(),
-                Command::Hex => "HEX".to_string(),
+                // Command::Hex => "HEX".to_string(),
                 // Command::Undo => "UNDO".to_string(),
                 // Command::Redo => "REDO".to_string(),
                 _ => "".to_string(),
             }
         )
+    }
+}
+
+pub struct UI {
+    pub elements: Vec<Element>,
+}
+
+impl UI {
+    pub fn draw(&self, stdout: &mut Stdout, max_width: usize, bg_color: Color) {
+        let used_width: usize = self.elements.iter().map(|el| el.get_width()).sum();
+        let free_space = if used_width > max_width {
+            0
+        } else {
+            max_width - used_width
+        };
+        let pad_len = free_space / (self.elements.len() - 1);
+        let final_pad_len = free_space % (self.elements.len() - 1);
+        let len = self.elements.len();
+        for (i, element) in self.elements.iter().enumerate() {
+            element.draw(stdout, bg_color);
+            let pad = if i + 1 == len { final_pad_len } else { pad_len };
+            queue!(
+                stdout,
+                SetBackgroundColor(Color::DarkGrey),
+                Print(" ".repeat(pad))
+            )
+            .unwrap();
+        }
+    }
+}
+
+pub struct Element {
+    pub nodes: Vec<Node>,
+}
+
+impl Element {
+    pub fn draw(&self, stdout: &mut Stdout, bg_color: Color) {
+        let len = self.nodes.len();
+        for (i, node) in self.nodes.iter().enumerate() {
+            let bg_color = if let Some(color) = node.bg {
+                color
+            } else {
+                bg_color
+            };
+            queue!(
+                stdout,
+                SetBackgroundColor(bg_color),
+                SetForegroundColor(node.color),
+                Print(if i == 0 { " " } else { "" }),
+                Print(&node.value),
+                Print(if i == len - 1 { " " } else { "" })
+            )
+            .unwrap();
+        }
+    }
+    pub fn get_width(&self) -> usize {
+        let width: usize = self.nodes.iter().map(|node| node.value.len()).sum();
+        width + 2
+    }
+}
+
+pub struct Node {
+    pub value: String,
+    pub color: Color,
+    pub bg: Option<Color>,
+}
+
+impl Node {
+    pub fn new(value: String, color: Color) -> Self {
+        Node {
+            value,
+            color,
+            bg: None,
+        }
     }
 }

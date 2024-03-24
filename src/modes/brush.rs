@@ -44,25 +44,25 @@ where
 
 pub fn brush(event: &Event, _stdout: &mut Stdout, state: &mut State) {
     let (mode, size) = {
-        let m_test = match &mut state.mode {
+        let data = match &mut state.mode {
             super::Mode::Brush(t) => t,
             _ => unreachable!(),
         };
         handle_keychar(&event, |c| match c {
-            'a' => m_test.mode = BrushMode::Add,
-            'f' => m_test.mode = BrushMode::Subtract,
-            's' => m_test.size += 1,
-            'd' => m_test.size = if m_test.size == 1 { 1 } else { m_test.size - 1 },
+            'a' => data.mode = BrushMode::Add,
+            'f' => data.mode = BrushMode::Subtract,
+            's' => data.size += 1,
+            'd' => data.size = if data.size == 1 { 1 } else { data.size - 1 },
             _ => {}
         });
         handle_mouse(event, |ev| match ev.kind {
-            MouseEventKind::ScrollUp => m_test.size += 1,
+            MouseEventKind::ScrollUp => data.size += 1,
             MouseEventKind::ScrollDown => {
-                m_test.size = if m_test.size == 1 { 1 } else { m_test.size - 1 }
+                data.size = if data.size == 1 { 1 } else { data.size - 1 }
             }
             _ => {}
         });
-        (m_test.mode.clone(), m_test.size)
+        (data.mode.clone(), data.size)
     };
 
     handle_click(event, |_, col, row| {
@@ -77,9 +77,11 @@ pub fn brush(event: &Event, _stdout: &mut Stdout, state: &mut State) {
                     .get(col, row)
                     .and_then(|el| LUMA_VALUES.into_iter().position(|x| x == el.brush))
                     .unwrap_or(0);
-                let old_luma = old_luma / 4 + (rand::random::<u8>() / 4) as usize;
                 let luma_value = match mode {
-                    BrushMode::Add => LUMA_VALUES[min(old_luma + new_luma, LUMA_VALUES.len() - 1)],
+                    BrushMode::Add => {
+                        let old_luma = old_luma / 4 + (rand::random::<u8>() / 4) as usize;
+                        LUMA_VALUES[min(old_luma + new_luma, LUMA_VALUES.len() - 1)]
+                    }
                     BrushMode::Subtract => {
                         LUMA_VALUES[if old_luma < new_luma {
                             0

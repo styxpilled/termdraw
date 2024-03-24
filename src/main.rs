@@ -15,8 +15,7 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
-use handlers::{handle_click, handle_mouse};
-use modes::eyedropper;
+use handlers::handle_click;
 
 use crate::data::*;
 use crate::modes::Mode;
@@ -50,7 +49,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
 
     // Get current x, y, size
     let (x, y) = position().unwrap_or_default();
-    let (max_x, max_y) = size().unwrap_or_default();
+    let (max_width, max_height) = size().unwrap_or_default();
     // Skip gets used to skip processing of an event if it's already been processed
     let mut skip = false;
 
@@ -63,7 +62,7 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     // TODO: custom colors
     handle_click(&event, |ev, col, row| {
         // Color palette
-        if row + 1 == max_y {
+        if row + 1 == max_height {
             let offset = format!(" {} ", state.mode).len() as u16 + 1;
             if col > offset && col < offset + 16 {
                 state.color = state.colors[(col - offset) as usize];
@@ -116,65 +115,107 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
         queue!(stdout, cursor::Show).unwrap();
     }
 
-    queue!(stdout, cursor::MoveTo(0, max_y)).unwrap();
+    queue!(stdout, cursor::MoveTo(0, max_height)).unwrap();
     let bar_color = state.mode.get_color();
-    let mode_text = format!(" {} ", state.mode);
-    let pos_text = format!(" repaints: {} | pos: ({x}, {y}) ", state.repaint_counter);
+    let mode_text = format!("{}", state.mode);
 
+    state.ui.elements = vec![];
+
+    state.ui.elements.push({
+        let nodes = vec![Node::new(mode_text, Color::Black)];
+        Element { nodes }
+    });
+
+    state.ui.elements.push({
+        let mut nodes: Vec<Node> = vec![];
+        for col in state.colors.iter() {
+            nodes.push(Node {
+                value: "@".to_string(),
+                color: *col,
+                bg: Some(Color::Rgb { r: 0, g: 0, b: 0 }),
+            });
+        }
+        Element { nodes }
+    });
+
+    state.ui.elements.push({
+        let nodes = vec![Node::new(format!("{}", state.command), Color::Black)];
+        Element { nodes }
+    });
+
+    state.ui.elements.push({
+        let nodes = vec![Node::new("T".to_string(), state.color)];
+        Element { nodes }
+    });
+
+    state.ui.elements.push({
+        let nodes = vec![Node::new(
+            format!("repaints: {:04}", state.repaint_counter),
+            Color::Black,
+        )];
+        Element { nodes }
+    });
+
+    state.ui.elements.push({
+        let nodes = vec![Node::new(format!("pos: {:02}, {:02}", x, y), Color::Black)];
+        Element { nodes }
+    });
     // MODE
-    queue!(
-        stdout,
-        SetAttribute(Attribute::Bold),
-        SetBackgroundColor(bar_color),
-        SetForegroundColor(Color::Black),
-        crossterm::style::Print(mode_text),
-        SetBackgroundColor(Color::DarkGrey),
-        crossterm::style::Print(" "),
-    )
-    .unwrap();
+    // queue!(
+    //     stdout,
+    //     SetAttribute(Attribute::Bold),
+    //     SetBackgroundColor(bar_color),
+    //     SetForegroundColor(Color::Black),
+    //     crossterm::style::Print(mode_text),
+    //     SetBackgroundColor(Color::DarkGrey),
+    //     crossterm::style::Print(" "),
+    // )
+    // .unwrap();
 
-    for col in state.colors.iter() {
-        queue!(
-            stdout,
-            SetForegroundColor(*col),
-            crossterm::style::Print("@")
-        )
-        .unwrap();
-    }
+    // for col in state.colors.iter() {
+    //     queue!(
+    //         stdout,
+    //         SetForegroundColor(*col),
+    //         crossterm::style::Print("@")
+    //     )
+    //     .unwrap();
+    // }
 
     // COMMAND
-    queue!(
-        stdout,
-        crossterm::style::Print(" "),
-        SetAttribute(Attribute::Bold),
-        SetBackgroundColor(bar_color),
-        SetForegroundColor(Color::Black),
-        crossterm::style::Print(format!(" {} ", state.command)),
-        SetBackgroundColor(Color::DarkGrey),
-        crossterm::style::Print(" "),
-    )
-    .unwrap();
+    // queue!(
+    //     stdout,
+    //     crossterm::style::Print(" "),
+    //     SetAttribute(Attribute::Bold),
+    //     SetBackgroundColor(bar_color),
+    //     SetForegroundColor(Color::Black),
+    //     crossterm::style::Print(format!(" {} ", state.command)),
+    //     SetBackgroundColor(Color::DarkGrey),
+    //     crossterm::style::Print(" "),
+    // )
+    // .unwrap();
 
-    queue!(
-        stdout,
-        // LEFT PAD
-        // crossterm::style::Print(left_pad),
-        // CURRENT COLOR
-        SetBackgroundColor(bar_color),
-        SetForegroundColor(Color::Black),
-        crossterm::style::Print(" ["),
-        SetForegroundColor(state.color),
-        crossterm::style::Print("T"),
-        SetForegroundColor(Color::Black),
-        crossterm::style::Print("] "),
-        // RIGHT PAD
-        SetBackgroundColor(Color::DarkGrey),
-        crossterm::style::Print(" "),
-        // INFO
-        SetBackgroundColor(bar_color),
-        crossterm::style::Print(pos_text),
-    )
-    .unwrap();
+    // queue!(
+    //     stdout,
+    //     // LEFT PAD
+    //     // crossterm::style::Print(left_pad),
+    //     // CURRENT COLOR
+    //     SetBackgroundColor(bar_color),
+    //     SetForegroundColor(Color::Black),
+    //     crossterm::style::Print(" ["),
+    //     SetForegroundColor(state.color),
+    //     crossterm::style::Print("T"),
+    //     SetForegroundColor(Color::Black),
+    //     crossterm::style::Print("] "),
+    //     // RIGHT PAD
+    //     SetBackgroundColor(Color::DarkGrey),
+    //     crossterm::style::Print(" "),
+    //     // INFO
+    //     SetBackgroundColor(bar_color),
+    //     crossterm::style::Print(pos_text),
+    // )
+    // .unwrap();
+
+    state.ui.draw(stdout, max_width.into(), bar_color);
 
     queue!(
         stdout,
@@ -201,6 +242,7 @@ async fn event_handler() {
         command: Command::None,
         colors: generate_colors(),
         drag_pos: (0, 0),
+        ui: UI { elements: vec![] },
         virtual_display: Canvas::new(termsize.0, termsize.1),
     };
 
