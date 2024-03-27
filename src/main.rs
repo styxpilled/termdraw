@@ -1,6 +1,7 @@
 use std::{
     io::{stdout, Stdout, Write},
     time::Duration,
+    vec,
 };
 
 use commands::process_shortcuts;
@@ -11,11 +12,11 @@ use crossterm::{
     cursor::{self, position},
     event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers},
     execute, queue,
-    style::{Attribute, Color, SetAttribute, SetBackgroundColor, SetForegroundColor},
+    style::{Attribute, Color, Print, SetAttribute, SetBackgroundColor, SetForegroundColor},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
     Result,
 };
-use handlers::handle_click;
+use handlers::{get_click_pos, handle_click};
 
 use crate::data::*;
 use crate::modes::Mode;
@@ -62,15 +63,16 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
     // TODO: custom colors
     handle_click(&event, |ev, col, row| {
         // Color palette
-        if row + 1 == max_height {
-            let offset = format!(" {} ", state.mode).len() as u16 + 1;
-            if col > offset && col < offset + 16 {
-                state.color = state.colors[(col - offset) as usize];
-            }
-            skip = true;
-        }
+        // if row + 1 == max_height {
+        //     let offset = format!(" {} ", state.mode).len() as u16 + 1;
+        //     if col > offset && col < offset + 16 {
+        //         state.color = state.colors[(col - offset) as usize];
+        //     }
+        //     skip = true;
+        // }
         // Process ALT-eyedropper
-        else if ev.modifiers.contains(KeyModifiers::ALT) {
+
+        if ev.modifiers.contains(KeyModifiers::ALT) {
             state.eyedrop(col, row);
             skip = true;
         }
@@ -117,105 +119,32 @@ fn draw(event: Event, stdout: &mut Stdout, state: &mut State) -> bool {
 
     queue!(stdout, cursor::MoveTo(0, max_height)).unwrap();
     let bar_color = state.mode.get_color();
-    let mode_text = format!("{}", state.mode);
 
-    state.ui.elements = vec![];
+    let mut ui = UI {
+        elements: vec![],
+        stdout: stdout,
+        pos: get_click_pos(&event),
+        max: (max_width as usize, max_height as usize),
+        bg_color: bar_color.clone(),
+        pad: state.pad,
+        // state: state,
+        offset: 0,
+    };
+    // ui.elements = vec![];
 
-    state.ui.elements.push({
-        let nodes = vec![Node::new(mode_text, Color::Black)];
-        Element { nodes }
-    });
+    if ui.add(|| Widget::new("CYAN", state.color)).clicked() {
+        state.color = Color::Cyan;
+    };
 
-    state.ui.elements.push({
-        let mut nodes: Vec<Node> = vec![];
-        for col in state.colors.iter() {
-            nodes.push(Node {
-                value: "@".to_string(),
-                color: *col,
-                bg: Some(Color::Rgb { r: 0, g: 0, b: 0 }),
-            });
-        }
-        Element { nodes }
-    });
+    ui.push(Widget::new(&state.mode, Color::Black));
 
-    state.ui.elements.push({
-        let nodes = vec![Node::new(format!("{}", state.command), Color::Black)];
-        Element { nodes }
-    });
+    ui.push(Widget::new("T", state.color));
 
-    state.ui.elements.push({
-        let nodes = vec![Node::new("T".to_string(), state.color)];
-        Element { nodes }
-    });
+    if ui.push(Widget::new("RED", state.color)).clicked() {
+        state.color = Color::Red;
+    }
 
-    state.ui.elements.push({
-        let nodes = vec![Node::new(
-            format!("repaints: {:04}", state.repaint_counter),
-            Color::Black,
-        )];
-        Element { nodes }
-    });
-
-    state.ui.elements.push({
-        let nodes = vec![Node::new(format!("pos: {:02}, {:02}", x, y), Color::Black)];
-        Element { nodes }
-    });
-    // MODE
-    // queue!(
-    //     stdout,
-    //     SetAttribute(Attribute::Bold),
-    //     SetBackgroundColor(bar_color),
-    //     SetForegroundColor(Color::Black),
-    //     crossterm::style::Print(mode_text),
-    //     SetBackgroundColor(Color::DarkGrey),
-    //     crossterm::style::Print(" "),
-    // )
-    // .unwrap();
-
-    // for col in state.colors.iter() {
-    //     queue!(
-    //         stdout,
-    //         SetForegroundColor(*col),
-    //         crossterm::style::Print("@")
-    //     )
-    //     .unwrap();
-    // }
-
-    // COMMAND
-    // queue!(
-    //     stdout,
-    //     crossterm::style::Print(" "),
-    //     SetAttribute(Attribute::Bold),
-    //     SetBackgroundColor(bar_color),
-    //     SetForegroundColor(Color::Black),
-    //     crossterm::style::Print(format!(" {} ", state.command)),
-    //     SetBackgroundColor(Color::DarkGrey),
-    //     crossterm::style::Print(" "),
-    // )
-    // .unwrap();
-
-    // queue!(
-    //     stdout,
-    //     // LEFT PAD
-    //     // crossterm::style::Print(left_pad),
-    //     // CURRENT COLOR
-    //     SetBackgroundColor(bar_color),
-    //     SetForegroundColor(Color::Black),
-    //     crossterm::style::Print(" ["),
-    //     SetForegroundColor(state.color),
-    //     crossterm::style::Print("T"),
-    //     SetForegroundColor(Color::Black),
-    //     crossterm::style::Print("] "),
-    //     // RIGHT PAD
-    //     SetBackgroundColor(Color::DarkGrey),
-    //     crossterm::style::Print(" "),
-    //     // INFO
-    //     SetBackgroundColor(bar_color),
-    //     crossterm::style::Print(pos_text),
-    // )
-    // .unwrap();
-
-    state.ui.draw(stdout, max_width.into(), bar_color);
+    state.pad = ui.render((max_width.into(), max_height.into()), bar_color);
 
     queue!(
         stdout,
@@ -241,8 +170,9 @@ async fn event_handler() {
         pos: (0, 0),
         command: Command::None,
         colors: generate_colors(),
+        pad: 0,
         drag_pos: (0, 0),
-        ui: UI { elements: vec![] },
+        // ui: UI { elements: vec![] },
         virtual_display: Canvas::new(termsize.0, termsize.1),
     };
 

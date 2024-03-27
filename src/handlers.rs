@@ -47,3 +47,16 @@ where
         _ => {}
     });
 }
+
+pub fn get_click_pos(event: &Event) -> Option<(u8, u8)> {
+    let mut v = None;
+    handle_mouse(event, |ev| {
+        v = match ev.kind {
+            MouseEventKind::Drag(_) | MouseEventKind::Down(_) => {
+                Some((ev.column as u8, ev.row as u8))
+            }
+            _ => None,
+        }
+    });
+    v
+}

@@ -75,6 +75,21 @@ impl Mode {
     }
 }
 
+impl From<&Mode> for String {
+    fn from(value: &Mode) -> Self {
+        match value {
+            Mode::Brush(_) => "BRUSH",
+            Mode::Eyedropper => "EYEDROPPER",
+            Mode::Command => "COMMAND",
+            Mode::Insert => "INSERT",
+            Mode::Pencil(_) => "PENCIL",
+            Mode::ContentBrush => "CONTENT BRUSH",
+            Mode::Hex(_) => "HEX",
+        }
+        .to_owned()
+    }
+}
+
 impl Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
